@@ -1,0 +1,13 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.DS_Store
+# 接口凭证与本地会话数据,绝不公开
+token.json
+.claude/
+# 安装包太大,不进代码仓库
+releases/

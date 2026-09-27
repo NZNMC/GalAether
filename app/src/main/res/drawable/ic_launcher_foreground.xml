@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pixel / Material You 风格图标前景:星球 + 轨道环 + 星芒 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 椭圆轨道环 -->
+    <path
+        android:pathData="M54,34 C71.7,34 86,43 86,54 C86,65 71.7,74 54,74 C36.3,74 22,65 22,54 C22,43 36.3,34 54,34 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:fillColor="#00000000" />
+    <!-- 星球 -->
+    <path
+        android:pathData="M54,54 m-14,0 a14,14 0 1 1 28,0 a14,14 0 1 1 -28,0"
+        android:fillColor="#FFFFFF" />
+    <!-- 右上星芒 -->
+    <path
+        android:pathData="M72,22 L74.6,28.6 L81,31 L74.6,33.4 L72,40 L69.4,33.4 L63,31 L69.4,28.6 Z"
+        android:fillColor="#FFFFFF" />
+</vector>
