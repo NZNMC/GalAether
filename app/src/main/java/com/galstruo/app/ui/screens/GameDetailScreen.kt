@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,6 +108,9 @@ import com.galstruo.app.data.searchgal.SearchGalPlatform
 import com.galstruo.app.data.shinnku.ShinnkuFile
 import com.galstruo.app.data.shinnku.VersionType
 import com.galstruo.app.data.ymgal.GameDetail
+import com.galstruo.app.data.ymgal.GameItem
+import com.galstruo.app.ui.components.CoverCard
+import com.galstruo.app.ui.components.LocalShowJapaneseNames
 import com.galstruo.app.ui.components.pressScale
 import com.galstruo.app.ui.detail.GameDetailViewModel
 import kotlinx.coroutines.delay
@@ -117,7 +122,10 @@ fun GameDetailScreen(
     gid: Long,
     orgName: String?,
     onBack: () -> Unit,
-    detailViewModel: GameDetailViewModel = viewModel(key = "game-$gid") { GameDetailViewModel(gid) },
+    onOpenGame: (GameItem) -> Unit,
+    detailViewModel: GameDetailViewModel = viewModel(key = "game-$gid") {
+        GameDetailViewModel(gid, orgName)
+    },
 ) {
     val detail = detailViewModel.detail
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
@@ -141,8 +149,12 @@ fun GameDetailScreen(
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
+                val useJp = LocalShowJapaneseNames.current
+                val titleName = detail?.let { d ->
+                    if (useJp && !d.name.isNullOrBlank()) d.name.orEmpty() else d.displayName
+                } ?: "游戏详情"
                 Text(
-                    detail?.displayName ?: "游戏详情",
+                    titleName,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -224,7 +236,7 @@ fun GameDetailScreen(
                 }
             }
 
-            detail != null -> DetailContent(detail, orgName, detailViewModel, tasks)
+            detail != null -> DetailContent(detail, orgName, detailViewModel, tasks, onOpenGame)
         }
     }
 }
@@ -235,8 +247,13 @@ private fun DetailContent(
     orgName: String?,
     vm: GameDetailViewModel,
     tasks: Map<String, DownloadTask>,
+    onOpenGame: (GameItem) -> Unit,
 ) {
     val context = LocalContext.current
+    // 日文原名开关:开启时大标题显示日文原名,下面小字显示中文名
+    val useJp = LocalShowJapaneseNames.current
+    val coverTitle = if (useJp && !detail.name.isNullOrBlank()) detail.name.orEmpty() else detail.displayName
+    val coverSub = if (useJp && !detail.name.isNullOrBlank()) detail.displayName else detail.name.orEmpty()
     var typeFilter by remember { mutableStateOf<VersionType?>(null) }
     var pendingDownload by remember { mutableStateOf<ShinnkuFile?>(null) }
     var showManageDialog by remember { mutableStateOf(false) }
@@ -354,14 +371,14 @@ private fun DetailContent(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                 ) {
                     Text(
-                        detail.displayName,
+                        coverTitle,
                         color = Color.White,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
-                    if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
+                    if (coverSub.isNotBlank() && coverSub != coverTitle) {
                         Text(
-                            detail.name.orEmpty(),
+                            coverSub,
                             color = Color.White.copy(alpha = 0.85f),
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -386,6 +403,17 @@ private fun DetailContent(
                     .forEach { InfoChip(platformLabel(it)) }
                 if (detail.haveChinese) InfoChip("官方中文")
                 if (detail.restricted) InfoChip("限制级")
+            }
+        }
+        // 限制级作品提示:成年确认 + 版权提醒
+        if (detail.restricted) {
+            item {
+                Text(
+                    "本作品为限制级(18+)作品,请确认你已成年并遵守当地法律法规。游戏版权归原作者所有,请支持正版。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
         }
         // 查找资源:三来源合成一张卡,顶部 pill 切换
@@ -435,6 +463,30 @@ private fun DetailContent(
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 24.sp,
                 )
+            }
+        }
+        // 同会社作品:同一制作方的其他游戏,横向滑动
+        if (vm.orgGames.isNotEmpty()) {
+            item {
+                Column {
+                    Text(
+                        "同会社作品",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                    ) {
+                        items(vm.orgGames, key = { it.gameId }) { game ->
+                            CoverCard(
+                                game,
+                                onClick = { onOpenGame(game) },
+                                modifier = Modifier.width(140.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }

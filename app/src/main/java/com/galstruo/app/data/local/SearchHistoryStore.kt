@@ -35,4 +35,10 @@ object SearchHistoryStore {
         _keywords.value = emptyList()
         saveList(FILE, emptyList<String>())
     }
+
+    /** 整体替换(导入备份时用) */
+    fun replaceAll(list: List<String>) {
+        _keywords.value = list.take(MAX)
+        saveList(FILE, _keywords.value)
+    }
 }

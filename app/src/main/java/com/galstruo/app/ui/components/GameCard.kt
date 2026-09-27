@@ -1,6 +1,7 @@
 package com.galstruo.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,10 +37,17 @@ import com.galstruo.app.data.ymgal.GameItem
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(28.dp)
+    // 日文原名开关:开启时主标题显示日文原名,副标题显示中文名
+    val useJp = LocalShowJapaneseNames.current
+    val title = if (useJp && !item.name.isNullOrBlank()) item.name.orEmpty() else item.displayName
+    val subName = if (useJp && !item.name.isNullOrBlank()) item.displayName else item.name.orEmpty()
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        modifier = modifier.fillMaxWidth().pressScale(),
+        shape = shape,
+        modifier = modifier
+            .fillMaxWidth()
+            .pressScale(),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
@@ -54,15 +62,15 @@ fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    item.displayName,
+                    title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!item.name.isNullOrBlank() && item.name != item.displayName) {
+                if (subName.isNotBlank() && subName != title) {
                     Text(
-                        item.name,
+                        subName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -131,11 +139,87 @@ fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
+/** 紧凑列表行(设置里「列表样式」可切换):小封面 + 单行标题,信息密度更高 */
+@Composable
+fun GameRow(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(18.dp)
+    // 日文原名开关:开启时主标题显示日文原名,副标题显示中文名
+    val useJp = LocalShowJapaneseNames.current
+    val title = if (useJp && !item.name.isNullOrBlank()) item.name.orEmpty() else item.displayName
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .pressScale()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model = item.coverUrl,
+            contentDescription = item.displayName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (useJp && item.displayName != title) {
+                Text(
+                    item.displayName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                item.orgName?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                item.releaseDate?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** 竖版封面卡片(用于"今日推荐/猜你喜欢"横向滑动列表):海报式,标题压在封面渐变上 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoverCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, shape = RoundedCornerShape(24.dp), modifier = modifier.pressScale()) {
+    val shape = RoundedCornerShape(24.dp)
+    // 日文原名开关:开启时封面标题显示日文原名
+    val useJp = LocalShowJapaneseNames.current
+    val title = if (useJp && !item.name.isNullOrBlank()) item.name.orEmpty() else item.displayName
+    Card(
+        onClick = onClick,
+        shape = shape,
+        modifier = modifier
+            .pressScale(),
+    ) {
         Box {
             AsyncImage(
                 model = item.coverUrl,
@@ -159,7 +243,7 @@ fun CoverCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier
                     )
             )
             Text(
-                item.displayName,
+                title,
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,

@@ -4,8 +4,11 @@
     <external-files-path
         name="downloads"
         path="downloads/" />
-    <!-- 缓存目录,用于"检查更新"下载的安装包 -->
+    <!-- 缓存目录,用于"检查更新"与模拟器下载的安装包 -->
     <cache-path
         name="update_apk"
         path="update/" />
+    <cache-path
+        name="emulator_apk"
+        path="emulators/" />
 </paths>

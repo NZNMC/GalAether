@@ -38,4 +38,10 @@ object HistoryStore {
         _history.value = emptyList()
         saveList(FILE, emptyList<HistoryEntry>())
     }
+
+    /** 整体替换(导入备份时用) */
+    fun replaceAll(list: List<HistoryEntry>) {
+        _history.value = list
+        saveList(FILE, list)
+    }
 }

@@ -13,10 +13,11 @@ import com.galstruo.app.data.searchgal.SearchGalPlatform
 import com.galstruo.app.data.shinnku.ShinnkuApi
 import com.galstruo.app.data.shinnku.ShinnkuFile
 import com.galstruo.app.data.ymgal.GameDetail
+import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.data.ymgal.YmgalRepository
 import kotlinx.coroutines.launch
 
-class GameDetailViewModel(private val gid: Long) : ViewModel() {
+class GameDetailViewModel(private val gid: Long, private val orgName: String?) : ViewModel() {
 
     var detail by mutableStateOf<GameDetail?>(null)
         private set
@@ -61,8 +62,27 @@ class GameDetailViewModel(private val gid: Long) : ViewModel() {
     var sgProgress by mutableStateOf<Pair<Int, Int>?>(null)
         private set
 
+    /** 同会社其他作品(按进入页面时带的会社名搜索,最多 10 部) */
+    var orgGames by mutableStateOf<List<GameItem>>(emptyList())
+        private set
+
     init {
         load()
+        loadOrgGames()
+    }
+
+    /** 同会社作品:直接用列表页传来的会社名搜索,排除本作;失败静默(不阻塞详情页) */
+    private fun loadOrgGames() {
+        if (orgName.isNullOrBlank()) return
+        viewModelScope.launch {
+            try {
+                orgGames = YmgalRepository.search(orgName, 1).result.orEmpty()
+                    .filter { it.gameId != gid }
+                    .take(10)
+            } catch (e: Exception) {
+                orgGames = emptyList()
+            }
+        }
     }
 
     fun load() {

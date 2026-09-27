@@ -2,7 +2,11 @@ package com.galstruo.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -11,7 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -33,7 +40,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.galstruo.app.BuildConfig
+import com.galstruo.app.data.SettingsStore
+import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.kungal.KungalAuth
+import com.galstruo.app.data.local.BackupManager
 import com.galstruo.app.ui.components.HistoryIcon
 import com.galstruo.app.ui.components.pressScale
 import kotlinx.coroutines.launch
@@ -41,14 +51,32 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    settings: SettingsStore,
     onOpenThemeSettings: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenKungalLogin: () -> Unit,
+    uiSettings: UiSettings,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val user by KungalAuth.user.collectAsStateWithLifecycle()
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var ghMenuOpen by remember { mutableStateOf(false) }
+    var showGhLogout by remember { mutableStateOf(false) }
+
+    // 数据备份:导出到下载目录 / 从备份文件导入(系统文件选择器)
+    var backupBusy by remember { mutableStateOf(false) }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && !backupBusy) {
+            scope.launch {
+                backupBusy = true
+                Toast.makeText(context, BackupManager.import(context, uri), Toast.LENGTH_LONG).show()
+                backupBusy = false
+            }
+        }
+    }
 
     // 每次进入「我的」页都刷新登录状态(WebView 的 Cookie 重启后仍在,这里恢复)
     LaunchedEffect(Unit) { KungalAuth.refresh() }
@@ -91,6 +119,55 @@ fun ProfileScreen(
                 },
             )
         }
+        // GitHub 账号:登录云同步后显示头像与昵称,点击弹出小菜单(打开同步设置 / 退出登录)
+        if (uiSettings.githubUser.isNotBlank()) {
+            Box {
+                ListItem(
+                    headlineContent = { Text(uiSettings.githubUser) },
+                    supportingContent = { Text("已登录 GitHub · 数据自动备份到云端") },
+                    leadingContent = {
+                        if (uiSettings.githubAvatar.isNotBlank()) {
+                            AsyncImage(
+                                model = uiSettings.githubAvatar,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .pressScale()
+                        .clickable { ghMenuOpen = true },
+                )
+                DropdownMenu(
+                    expanded = ghMenuOpen,
+                    onDismissRequest = { ghMenuOpen = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("打开同步设置") },
+                        onClick = {
+                            ghMenuOpen = false
+                            onOpenThemeSettings()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("退出登录") },
+                        onClick = {
+                            ghMenuOpen = false
+                            showGhLogout = true
+                        },
+                    )
+                }
+            }
+        }
         ListItem(
             headlineContent = { Text("设置") },
             supportingContent = { Text("主题 · 深色模式 · 内容 · 数据与存储 · 网络代理") },
@@ -108,8 +185,30 @@ fun ProfileScreen(
                 .clickable { onOpenHistory() },
         )
         ListItem(
+            headlineContent = { Text("数据备份") },
+            supportingContent = { Text("导出备份到下载目录 / 从备份文件恢复收藏与记录") },
+            leadingContent = { Icon(Icons.Filled.Share, contentDescription = null) },
+            modifier = Modifier
+                .pressScale()
+                .clickable {
+                    if (backupBusy) return@clickable
+                    scope.launch {
+                        backupBusy = true
+                        Toast.makeText(context, BackupManager.export(context), Toast.LENGTH_LONG).show()
+                        backupBusy = false
+                    }
+                },
+            trailingContent = {
+                TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }) {
+                    Text("导入")
+                }
+            },
+        )
+        ListItem(
             headlineContent = { Text("关于") },
-            supportingContent = { Text("GalAether ${BuildConfig.VERSION_NAME} · 点击查看项目主页") },
+            supportingContent = {
+                Text("GalAether ${BuildConfig.VERSION_NAME} · 包名 ${BuildConfig.APPLICATION_ID} · 点击查看项目主页")
+            },
             leadingContent = { Icon(Icons.Filled.Info, contentDescription = null) },
             modifier = Modifier
                 .pressScale()
@@ -134,6 +233,26 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showGhLogout) {
+        AlertDialog(
+            onDismissRequest = { showGhLogout = false },
+            title = { Text("退出 GitHub 登录") },
+            text = { Text("退出后不再自动同步到 GitHub,云端备份会保留,重新登录即可找回。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showGhLogout = false
+                    scope.launch {
+                        settings.clearGithubAuth()
+                        Toast.makeText(context, "已退出 GitHub 登录", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("退出") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGhLogout = false }) { Text("取消") }
             },
         )
     }

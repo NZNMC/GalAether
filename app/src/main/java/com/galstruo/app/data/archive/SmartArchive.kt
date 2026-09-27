@@ -23,8 +23,8 @@ import java.util.zip.ZipInputStream
 
 /**
  * 智能归档:下载完成后按文件类型自动处理。
- * - APK → 通知一键安装
- * - ZIP + KRKR/ONS → 解压到对应模拟器目录(需"所有文件访问"权限,未授权则复制到下载目录)
+ * - APK → 自动弹出安装界面(通知留作兜底,再点一次也能装)
+ * - ZIP + KRKR/ONS → 解压到对应模拟器目录(需"所有文件访问"权限,未授权则复制到下载目录),KRKR 已装时通知带"打开模拟器"跳转
  * - 其余(7z/rar 等)→ 复制到系统下载目录,用户自行解压
  */
 object SmartArchive {
@@ -42,7 +42,11 @@ object SmartArchive {
         }
         try {
             when {
-                task.fileName.endsWith(".apk", true) -> notifyInstall(context, task, src)
+                // APK:自动弹出安装界面(安装通知留作兜底,再点一次也能装)
+                task.fileName.endsWith(".apk", true) -> {
+                    notifyInstall(context, task, src)
+                    installApk(context, src)
+                }
                 task.fileName.endsWith(".zip", true) && isSimulatorType(task) -> handleZip(context, task, src)
                 else -> handleCopy(context, task, src)
             }
@@ -80,7 +84,25 @@ object SmartArchive {
         }
         DownloadManager.markArchived(task.url)
         src.delete()  // 解压完成,应用目录里的压缩包不再需要
-        notify(context, task, "已解压到 ${targetDir.name} 文件夹")
+        // 解压完可直接打开模拟器游玩:KRKR 已装时通知带上"打开模拟器"跳转
+        val emuName = if (task.typeLabel.contains("ONS")) "ONS 模拟器" else "KRKR2"
+        val launch = emulatorLaunchIntent(context, task)
+        notify(
+            context, task,
+            if (launch != null) "已解压到 ${targetDir.name} 文件夹,点击打开 $emuName"
+            else "已解压到 ${targetDir.name} 文件夹,请打开 $emuName 游玩",
+            launch,
+        )
+    }
+
+    /** 模拟器启动跳转:KRKR2 包名已知;模拟器未安装时返回 null */
+    private fun emulatorLaunchIntent(context: Context, task: DownloadTask): Intent? {
+        val pkg = if (task.typeLabel.contains("ONS")) null else "org.tvp.kirikiri2"
+        if (pkg == null) return null
+        val installed = runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+        if (!installed) return null
+        return context.packageManager.getLaunchIntentForPackage(pkg)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     /** 复制到系统下载目录。成功返回提示文字,失败抛异常。 */

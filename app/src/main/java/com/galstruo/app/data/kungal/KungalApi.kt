@@ -80,6 +80,18 @@ object KungalApi {
         }
     }
 
+    /** 带 Cookie 的 GET;非 2xx(如 401 未登录)返回 null,不抛异常 */
+    private suspend fun fetchWithCookiesOrNull(url: String, cookies: String): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", UA)
+            .header("Cookie", cookies)
+            .build()
+        currentClient().newCall(request).execute().use { resp ->
+            if (!resp.isSuccessful) null else resp.body?.string().orEmpty()
+        }
+    }
+
     /** 按关键词搜索网盘资源(第 1 页,最多 20 条左右) */
     suspend fun searchResources(keyword: String, page: Int = 1): List<KungalResource> {
         val kw = URLEncoder.encode(keyword, "UTF-8").replace("+", "%20")
@@ -149,28 +161,70 @@ object KungalApi {
 
     // ---------------- 官方接口(登录后) ----------------
 
-    /** 当前登录用户(GET /api/user);未登录/失效/解析失败返回 null */
+    /**
+     * 当前登录用户;未登录/失效/解析失败返回 null。
+     * 官网 2026-09 改版后旧接口 /api/user 已退役:先试新接口 /api/user/session
+     * (返回 { user: { uid, name, avatar, ... }, unread }),失败再试旧接口(过渡期双保险)。
+     */
     suspend fun currentUser(cookies: String): KungalUser? {
-        return try {
-            val raw = fetchWithCookies("$BASE/api/user", cookies)
+        // 新接口:GET /api/user/session
+        val fromSession = runCatching {
+            val raw = fetchWithCookiesOrNull("$BASE/api/user/session", cookies) ?: return@runCatching null
             val json = JsonParser.parseString(raw).asJsonObject
-            // 登录失效的标准响应:{"code":205,"message":"用户登录失效"}
-            if (json.get("code")?.asInt == 205) return null
-            // 有的接口会把数据包在 data 字段里
-            val obj = (json.get("data")?.takeIf { it.isJsonObject }?.asJsonObject) ?: json
-            val name = obj.get("name")?.asString ?: obj.get("username")?.asString ?: return null
-            var avatar = obj.get("avatar")?.let { a ->
-                when {
-                    a.isJsonPrimitive -> a.asString
-                    a.isJsonArray -> a.asJsonArray.firstOrNull()?.asString.orEmpty()
-                    else -> ""
-                }
-            }.orEmpty()
-            if (avatar.startsWith("/")) avatar = BASE + avatar
-            KungalUser(id = obj.get("uid")?.asLong ?: obj.get("id")?.asLong ?: 0L, name = name, avatar = avatar)
+            if (json.get("code")?.asInt == 205) return@runCatching null
+            val userObj = findObject(json, "user") ?: return@runCatching null
+            val name = userObj.get("name")?.asString ?: userObj.get("username")?.asString
+            if (name.isNullOrBlank()) null
+            else KungalUser(
+                id = userObj.get("uid")?.asLong ?: userObj.get("id")?.asLong ?: 0L,
+                name = name,
+                avatar = avatarOf(userObj.get("avatar")),
+            )
+        }.getOrNull()
+        if (fromSession != null) return fromSession
+        // 旧接口(官网已退役,过渡期兜底)
+        return try {
+            parseLegacyUser(fetchWithCookies("$BASE/api/user", cookies))
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** 从返回 JSON 里找 user 对象:优先根下的 user 字段,其次 data.user(两种包裹方式都兼容) */
+    private fun findObject(root: JsonObject, key: String): JsonObject? {
+        val direct = root.get(key)?.takeIf { it.isJsonObject }?.asJsonObject
+        if (direct != null) return direct
+        val data = root.get("data")?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+        return data.get(key)?.takeIf { it.isJsonObject }?.asJsonObject
+    }
+
+    /** 头像字段兼容三种形态:字符串 / 数组取第一个 / 图片对象(url·src·hash) */
+    private fun avatarOf(el: com.google.gson.JsonElement?): String {
+        if (el == null) return ""
+        var avatar = when {
+            el.isJsonPrimitive -> el.asString
+            el.isJsonArray -> el.asJsonArray.firstOrNull()?.asString.orEmpty()
+            el.isJsonObject -> {
+                val o = el.asJsonObject
+                o.get("url")?.asString ?: o.get("src")?.asString ?: o.get("hash")?.asString.orEmpty()
+            }
+            else -> ""
+        }
+        if (avatar.isNotBlank() && avatar.startsWith("/")) avatar = BASE + avatar
+        return avatar
+    }
+
+    /** 旧接口返回解析:{ name|username, avatar: str|array };登录失效标准响应 {"code":205} */
+    private fun parseLegacyUser(raw: String): KungalUser? {
+        val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return null
+        if (json.get("code")?.asInt == 205) return null
+        val obj = (json.get("data")?.takeIf { it.isJsonObject }?.asJsonObject) ?: json
+        val name = obj.get("name")?.asString ?: obj.get("username")?.asString ?: return null
+        return KungalUser(
+            id = obj.get("uid")?.asLong ?: obj.get("id")?.asLong ?: 0L,
+            name = name,
+            avatar = avatarOf(obj.get("avatar")),
+        )
     }
 
     /** 退出登录(POST /api/auth/logout) */

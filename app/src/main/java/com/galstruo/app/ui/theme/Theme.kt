@@ -34,7 +34,7 @@ fun GalStoreTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+    val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         dynamicColor && seedHue < 0
     ) {
         // 跟随壁纸动态取色(安卓 12+ 官方 Material You)
@@ -49,7 +49,7 @@ fun GalStoreTheme(
         buildScheme(seed, darkTheme)
     }
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = base,
         typography = Typography,
         shapes = AppShapes,
         content = content,

@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
@@ -31,11 +32,19 @@ import androidx.compose.ui.input.pointer.pointerInput
  * - BounceIcon:选中弹跳图标(底部导航用)
  */
 
+/** 界面动画总开关(设置里可关):pressScale / staggeredIn / BounceIcon / 页面切换动画全部联动 */
+val LocalMotionEnabled = staticCompositionLocalOf { true }
+
+/** 日文原名显示开关(设置里可开):开启后列表/卡片的主标题显示日文原名 */
+val LocalShowJapaneseNames = staticCompositionLocalOf { false }
+
 /**
  * 按压缩放:手指按下时组件轻微缩小,松开弹回。
  * 只处理视觉缩放,不消费事件,组件自带的点击/水波纹不受影响;列表滚动会自然取消。
  */
 fun Modifier.pressScale(scale: Float = 0.96f): Modifier = composed {
+    // 动画总开关关闭时不做按压缩放
+    if (!LocalMotionEnabled.current) return@composed this
     var pressed by remember { mutableStateOf(false) }
     val anim by animateFloatAsState(
         targetValue = if (pressed) scale else 1f,
@@ -58,6 +67,11 @@ fun Modifier.pressScale(scale: Float = 0.96f): Modifier = composed {
 /** 列表项交错入场:淡入 + 轻微上滑,按 index 错开(最多错开前 12 项,后面的同时进入) */
 @Composable
 fun staggeredIn(index: Int, visible: Boolean, content: @Composable () -> Unit) {
+    // 动画总开关关闭时直接显示,不做入场动画
+    if (!LocalMotionEnabled.current) {
+        if (visible) content()
+        return
+    }
     val delay = (index % 12) * 28
     AnimatedVisibility(
         visible = visible,
@@ -76,6 +90,11 @@ fun BounceIcon(
     contentDescription: String?,
     modifier: Modifier = Modifier,
 ) {
+    // 动画总开关关闭时直接显示静态图标
+    if (!LocalMotionEnabled.current) {
+        Icon(icon, contentDescription, modifier)
+        return
+    }
     val scale = remember { Animatable(1f) }
     LaunchedEffect(selected) {
         if (selected) {

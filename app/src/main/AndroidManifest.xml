@@ -16,6 +16,12 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- 检测模拟器是否已安装(安卓 11+ 包可见性) -->
+    <queries>
+        <package android:name="org.tvp.kirikiri2" />
+        <package android:name="com.akira.tyranoemu" />
+    </queries>
+
     <application
         android:name=".GalAetherApp"
         android:allowBackup="true"

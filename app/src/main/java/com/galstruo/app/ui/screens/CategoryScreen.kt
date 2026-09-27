@@ -28,10 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.galstruo.app.data.ListStyle
 import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.ui.category.CategoryViewModel
 import com.galstruo.app.ui.components.GameCard
+import com.galstruo.app.ui.components.GameRow
 import java.time.YearMonth
 
 /** 分类浏览:按发行月份浏览游戏 */
@@ -102,11 +104,20 @@ fun CategoryScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 items(games, key = { it.gameId }) { game ->
-                    GameCard(
-                        game,
-                        onClick = { onOpenGame(game) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
+                    // 列表样式:大卡片 / 紧凑行(设置里可切换)
+                    if (uiSettings.listStyle == ListStyle.COMPACT) {
+                        GameRow(
+                            game,
+                            onClick = { onOpenGame(game) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    } else {
+                        GameCard(
+                            game,
+                            onClick = { onOpenGame(game) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
         }

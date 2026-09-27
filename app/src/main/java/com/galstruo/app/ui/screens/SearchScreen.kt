@@ -43,11 +43,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.galstruo.app.data.ListStyle
+import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.local.SearchHistoryStore
 import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.ui.components.EmptyState
 import com.galstruo.app.ui.components.ErrorState
 import com.galstruo.app.ui.components.GameCard
+import com.galstruo.app.ui.components.GameRow
 import com.galstruo.app.ui.components.LoadingState
 import com.galstruo.app.ui.search.SearchViewModel
 
@@ -56,6 +59,7 @@ import com.galstruo.app.ui.search.SearchViewModel
 fun SearchScreen(
     onBack: () -> Unit,
     onOpenGame: (GameItem) -> Unit,
+    uiSettings: UiSettings,
     searchViewModel: SearchViewModel = viewModel(),
 ) {
     val history by SearchHistoryStore.keywords.collectAsStateWithLifecycle()
@@ -160,11 +164,20 @@ fun SearchScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items(searchViewModel.results, key = { it.gameId }) { game ->
-                    GameCard(
-                        game,
-                        onClick = { onOpenGame(game) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
+                    // 列表样式:大卡片 / 紧凑行(设置里可切换)
+                    if (uiSettings.listStyle == ListStyle.COMPACT) {
+                        GameRow(
+                            game,
+                            onClick = { onOpenGame(game) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    } else {
+                        GameCard(
+                            game,
+                            onClick = { onOpenGame(game) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
                 }
                 item {
                     when {

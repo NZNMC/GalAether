@@ -144,6 +144,12 @@ object DownloadManager {
         saveRecords()
     }
 
+    /** 整体替换记录(导入备份时用) */
+    fun replaceRecords(list: List<DownloadRecord>) {
+        _records.value = list
+        saveRecords()
+    }
+
     /** 记录对应的源文件(应用下载目录内) */
     fun recordFile(record: DownloadRecord): File =
         fileOf(DownloadTask(record.id, record.fileName, record.typeLabel, record.url))

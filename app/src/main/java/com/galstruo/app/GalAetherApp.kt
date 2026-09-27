@@ -9,7 +9,9 @@ import com.galstruo.app.data.download.DownloadManager
 import com.galstruo.app.data.local.FavoriteStore
 import com.galstruo.app.data.local.HistoryStore
 import com.galstruo.app.data.local.SearchHistoryStore
+import com.galstruo.app.data.kungal.KungalAuth
 import com.galstruo.app.data.network.NetConfig
+import com.galstruo.app.data.sync.SyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -36,6 +38,10 @@ class GalAetherApp : Application() {
                 }
             }
         }
+        // 云同步:自动监听数据变化上传,启动时与云端对账一次
+        SyncManager.init(SettingsStore(this))
+        // 鲲galgame 登录状态:恢复上次登录的用户信息(官网接口退役后的兜底)
+        KungalAuth.init(this)
     }
 
     companion object {
