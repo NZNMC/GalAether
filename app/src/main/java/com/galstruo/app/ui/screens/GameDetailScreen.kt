@@ -23,8 +23,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -327,44 +326,66 @@ private fun DetailContent(
     // 资源卡当前选中的来源:0=下载资源 1=网盘资源 2=更多资源站
     var resourceTab by remember { mutableStateOf(0) }
     LazyColumn(Modifier.fillMaxSize()) {
-        // 封面大图(标题由顶部栏显示,图上不再叠字,避免和封面自带文字糊在一起)
+        // 封面大图 + 底部渐变,标题和原名叠在图上
         item {
-            AsyncImage(
-                model = detail.coverUrl,
-                contentDescription = detail.displayName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f),
-            )
-        }
-        // 信息 chips 行(封面下方,横向可滚动)+ 原名
-        item {
-            Column {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Box {
+                AsyncImage(
+                    model = detail.coverUrl,
+                    contentDescription = detail.displayName,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .horizontalScroll(rememberScrollState()),
+                        .fillMaxWidth()
+                        .aspectRatio(1.6f),
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.45f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.78f),
+                            )
+                        ),
+                )
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                 ) {
-                    orgName?.let { InfoChip(it) }
-                    detail.releaseDate?.let { InfoChip(it) }
-                    // 平台信息在各发行版本(releases)里
-                    detail.releases.orEmpty()
-                        .mapNotNull { it.platform }
-                        .distinct()
-                        .forEach { InfoChip(platformLabel(it)) }
-                    if (detail.haveChinese) InfoChip("官方中文")
-                    if (detail.restricted) InfoChip("限制级")
-                }
-                if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
                     Text(
-                        detail.name.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        detail.displayName,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
                     )
+                    if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
+                        Text(
+                            detail.name.orEmpty(),
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
+            }
+        }
+        // 信息 chips 行(封面下方,横向可滚动)
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                orgName?.let { InfoChip(it) }
+                detail.releaseDate?.let { InfoChip(it) }
+                // 平台信息在各发行版本(releases)里
+                detail.releases.orEmpty()
+                    .mapNotNull { it.platform }
+                    .distinct()
+                    .forEach { InfoChip(platformLabel(it)) }
+                if (detail.haveChinese) InfoChip("官方中文")
+                if (detail.restricted) InfoChip("限制级")
             }
         }
         // 查找资源:三来源合成一张卡,顶部 pill 切换
@@ -659,6 +680,7 @@ private fun ResourceCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
+            // 三个标签按文字自然宽度居中排列(不再强制三等分,避免字号较大时换行堆叠)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -667,33 +689,18 @@ private fun ResourceCard(
                         RoundedCornerShape(50),
                     )
                     .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             ) {
-                ResourceTabPill("下载资源", tab == 0, { onTab(0) }, Modifier.weight(1f))
-                ResourceTabPill("网盘资源", tab == 1, { onTab(1) }, Modifier.weight(1f))
-                ResourceTabPill("更多资源站", tab == 2, { onTab(2) }, Modifier.weight(1f))
+                ResourceTabPill("下载资源", tab == 0, { onTab(0) })
+                ResourceTabPill("网盘资源", tab == 1, { onTab(1) })
+                ResourceTabPill("更多资源站", tab == 2, { onTab(2) })
             }
             Spacer(Modifier.height(14.dp))
-            AnimatedContent(
-                targetState = tab,
-                transitionSpec = {
-                    // 向右切换:新内容从右进、旧内容向左出;向左切换则相反
-                    if (targetState > initialState) {
-                        (slideInHorizontally { it / 4 } + fadeIn()).togetherWith(
-                            slideOutHorizontally { -it / 4 } + fadeOut()
-                        )
-                    } else {
-                        (slideInHorizontally { -it / 4 } + fadeIn()).togetherWith(
-                            slideOutHorizontally { it / 4 } + fadeOut()
-                        )
-                    }
-                },
-                label = "resourceTab",
-            ) { t ->
-                when (t) {
-                    0 -> DownloadTabContent(vm, typeFilter, onFilter, onFind)
-                    1 -> KungalTabContent(vm)
-                    else -> SearchGalTabContent(vm)
-                }
+            // 内容区不套切换动画(动画会压缩内容导致文字堆叠),靠标签弹跳反馈
+            when (tab) {
+                0 -> DownloadTabContent(vm, typeFilter, onFilter, onFind)
+                1 -> KungalTabContent(vm)
+                else -> SearchGalTabContent(vm)
             }
         }
     }
@@ -733,12 +740,13 @@ private fun ResourceTabPill(
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
             else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 9.dp),
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
