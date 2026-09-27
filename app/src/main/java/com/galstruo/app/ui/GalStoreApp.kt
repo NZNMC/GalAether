@@ -60,6 +60,7 @@ import com.galstruo.app.ui.components.BounceIcon
 import com.galstruo.app.ui.components.DownloadIcon
 import com.galstruo.app.ui.components.LocalMotionEnabled
 import com.galstruo.app.ui.components.LocalShowJapaneseNames
+import com.galstruo.app.ui.components.LocalShowNsfw
 import com.galstruo.app.ui.components.pressScale
 import com.galstruo.app.ui.onboarding.OnboardingScreen
 import com.galstruo.app.ui.screens.CategoryScreen
@@ -101,11 +102,12 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
         FontSize.LARGE -> 1.15f
         FontSize.NORMAL -> 1f
     }
-    // 全局 UI 参数下发:动画总开关、字体缩放、日文原名显示
+    // 全局 UI 参数下发:动画总开关、字体缩放、日文原名显示、NSFW 开关
     CompositionLocalProvider(
         LocalMotionEnabled provides motion,
         LocalDensity provides LocalDensity.current.let { Density(it.density, fontScale = fontScale) },
         LocalShowJapaneseNames provides uiSettings.showJapaneseNames,
+        LocalShowNsfw provides uiSettings.showNsfw,
     ) {
         // 首次启动:先展示新手引导,完成后才进入主界面
         if (!uiSettings.onboardingDone) {

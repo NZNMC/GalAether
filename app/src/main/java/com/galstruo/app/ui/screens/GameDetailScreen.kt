@@ -111,6 +111,7 @@ import com.galstruo.app.data.ymgal.GameDetail
 import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.ui.components.CoverCard
 import com.galstruo.app.ui.components.LocalShowJapaneseNames
+import com.galstruo.app.ui.components.LocalShowNsfw
 import com.galstruo.app.ui.components.pressScale
 import com.galstruo.app.ui.detail.GameDetailViewModel
 import kotlinx.coroutines.delay
@@ -254,6 +255,10 @@ private fun DetailContent(
     val useJp = LocalShowJapaneseNames.current
     val coverTitle = if (useJp && !detail.name.isNullOrBlank()) detail.name.orEmpty() else detail.displayName
     val coverSub = if (useJp && !detail.name.isNullOrBlank()) detail.displayName else detail.name.orEmpty()
+    // NSFW 开关(默认关):关闭时隐藏鲲galgame 网盘资源里的限制级作品
+    val showNsfw = LocalShowNsfw.current
+    val kungalShown = if (showNsfw) vm.kungalResources else vm.kungalResources.filterNot { it.nsfw }
+    val kungalHidden = vm.kungalResources.size - kungalShown.size
     var typeFilter by remember { mutableStateOf<VersionType?>(null) }
     var pendingDownload by remember { mutableStateOf<ShinnkuFile?>(null) }
     var showManageDialog by remember { mutableStateOf(false) }
@@ -439,7 +444,7 @@ private fun DetailContent(
                 )
             }
 
-            1 -> items(vm.kungalResources, key = { "kungal-${it.id}" }) { res ->
+            1 -> items(kungalShown, key = { "kungal-${it.id}" }) { res ->
                 KungalResourceRow(
                     res,
                     onViewLinks = { viewLinks(res) },
@@ -452,6 +457,17 @@ private fun DetailContent(
                 items(platform.items, key = { "sg-${platform.name}-${it.url}" }) { item ->
                     SearchGalItemRow(item, modifier = Modifier.animateItem())
                 }
+            }
+        }
+        // 按 NSFW 设置隐藏限制级资源时给出提示(开关在设置页)
+        if (resourceTab == 1 && kungalHidden > 0) {
+            item {
+                Text(
+                    "已按设置隐藏 $kungalHidden 条限制级资源(可在设置中开启显示)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
             }
         }
         item {

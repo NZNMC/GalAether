@@ -38,6 +38,9 @@ val LocalMotionEnabled = staticCompositionLocalOf { true }
 /** 日文原名显示开关(设置里可开):开启后列表/卡片的主标题显示日文原名 */
 val LocalShowJapaneseNames = staticCompositionLocalOf { false }
 
+/** NSFW 内容显示开关(设置里可开,默认关):关闭时列表过滤限制级内容 */
+val LocalShowNsfw = staticCompositionLocalOf { false }
+
 /**
  * 按压缩放:手指按下时组件轻微缩小,松开弹回。
  * 只处理视觉缩放,不消费事件,组件自带的点击/水波纹不受影响;列表滚动会自然取消。

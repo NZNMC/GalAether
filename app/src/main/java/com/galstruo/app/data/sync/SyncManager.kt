@@ -47,9 +47,10 @@ object SyncManager {
         if (settings != null) return
         settings = store
         scope.launch {
-            // OAuth App 更换后(如换 Client ID)旧令牌作废,自动退出登录,让用户重新授权
+            // OAuth App 更换后(如换 Client ID)旧令牌作废,自动退出登录,让用户重新授权。
+            // 旧版本登录时没有记录 Client ID(值为空),同样按旧令牌处理,强制重新授权一次
             val cfg = store.uiSettings.first()
-            if (cfg.githubClientId.isNotBlank() && cfg.githubClientId != GitHubSync.CLIENT_ID) {
+            if (cfg.githubClientId != GitHubSync.CLIENT_ID) {
                 store.clearGithubAuth()
             }
             // 数据变化自动同步(跳过启动时的初值组合,只有真正变化才触发)

@@ -12,8 +12,8 @@ android {
         applicationId = "com.galstruo.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 23
-        versionName = "1.0.0"
+        versionCode = 28
+        versionName = "1.0.5"
     }
 
     buildTypes {

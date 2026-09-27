@@ -2,6 +2,7 @@ package com.galstruo.app.data.kungal
 
 import com.galstruo.app.data.network.NetConfig
 import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,8 @@ data class KungalResource(
     val note: String = "",
     /** 是否来自官方接口(登录后) */
     val official: Boolean = false,
+    /** 是否为限制级(NSFW)作品(来自搜索页载荷的 is_nsfw;官方接口资源无此标记,默认 false) */
+    val nsfw: Boolean = false,
 )
 
 /**
@@ -55,6 +58,10 @@ object KungalApi {
         }
         return client
     }
+
+    // 首页载荷解析结果缓存:登录检测会连poll几次,10 秒内不重复抓首页
+    private var lastHomepageTryAt = 0L
+    private var lastHomepageUser: KungalUser? = null
 
     private suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -101,6 +108,8 @@ object KungalApi {
 
     /** 解析资源搜索页:每个资源是一个 <a href="/galgame/resource/{id}"> 卡片 */
     private fun parseSearch(html: String): List<KungalResource> {
+        // 渲染出的卡片上没有 NSFW 标记,但页面载荷里有每个作品的 is_nsfw,先解析成对照表
+        val nsfwMap = parseNsfwMap(html)
         val result = mutableListOf<KungalResource>()
         val marker = "<a href=\"/galgame/resource/"
         var idx = html.indexOf(marker)
@@ -113,11 +122,39 @@ object KungalApi {
             val title = Regex("""<h3[^>]*>([^<]{1,150})</h3>""").find(chunk)?.groupValues?.get(1)?.trim()
             val size = Regex("""([0-9.]+ ?[KMG]?B)(?:<!--|</span>)""").find(chunk)?.groupValues?.get(1)
             if (id != null && !title.isNullOrBlank()) {
-                result += KungalResource(id, title, size.orEmpty())
+                result += KungalResource(id, title, size.orEmpty(), nsfw = nsfwMap[id] ?: false)
             }
             idx = chunkEnd
         }
         return result.distinctBy { it.id }
+    }
+
+    /**
+     * 从搜索页 __NUXT_DATA__ 载荷里提取 资源id → is_nsfw 对照表。
+     * 载荷里每个资源是一个对象:{"object":→"galgame_resource" 类型标签,
+     * "id":→资源id字符串, "work":→游戏对象(含 is_nsfw 字段)}(2026-09 实测,
+     * 50 条资源全部命中;类型标签在载荷里只出现一次,其余都是指针)
+     */
+    private fun parseNsfwMap(html: String): Map<Long, Boolean> {
+        val m = Regex("""<script[^>]*id="__NUXT_DATA__"[^>]*>([\s\S]*?)</script>""").find(html)
+            ?: return emptyMap()
+        val arr = runCatching { JsonParser.parseString(m.groupValues[1]).asJsonArray }.getOrNull()
+            ?: return emptyMap()
+        val map = mutableMapOf<Long, Boolean>()
+        for (el in arr) {
+            if (!el.isJsonObject) continue
+            val o = el.asJsonObject
+            val type = derefPayload(arr, o.get("object") ?: continue)
+            if (!type.isJsonPrimitive || type.asString != "galgame_resource") continue
+            val rid = derefPayload(arr, o.get("id") ?: continue)
+                .takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                ?.asString?.toLongOrNull() ?: continue
+            val work = derefPayload(arr, o.get("work") ?: continue)
+                .takeIf { it.isJsonObject }?.asJsonObject ?: continue
+            val flag = derefPayload(arr, work.get("is_nsfw") ?: continue)
+            if (flag.isJsonPrimitive && flag.asJsonPrimitive.isBoolean) map[rid] = flag.asBoolean
+        }
+        return map
     }
 
     /** 解析资源详情页里的网盘下载链接 */
@@ -167,6 +204,10 @@ object KungalApi {
      * (返回 { user: { uid, name, avatar, ... }, unread }),失败再试旧接口(过渡期双保险)。
      */
     suspend fun currentUser(cookies: String): KungalUser? {
+        // 官网把 pinia KUNGalgameUser 存储持久化在同名 Cookie 里(SSR 还原登录态用),
+        // Cookie 值就是存储对象的 JSON(中文等字符会被 URL 编码)。这是最可靠的来源:
+        // 不依赖任何接口,也不依赖网页当前状态,直接解析
+        parseKungalUserCookie(cookies)?.let { return it }
         // 新接口:GET /api/user/session
         val fromSession = runCatching {
             val raw = fetchWithCookiesOrNull("$BASE/api/user/session", cookies) ?: return@runCatching null
@@ -183,11 +224,142 @@ object KungalApi {
         }.getOrNull()
         if (fromSession != null) return fromSession
         // 旧接口(官网已退役,过渡期兜底)
-        return try {
+        val legacy = try {
             parseLegacyUser(fetchWithCookies("$BASE/api/user", cookies))
         } catch (e: Exception) {
             null
         }
+        if (legacy != null) return legacy
+        // 最终兜底:接口全不可用时,直接抓官网首页(SSR 页面),
+        // 登录用户的数据就在页面的 __NUXT_DATA__ 载荷里
+        return currentUserFromHomepage(cookies)
+    }
+
+    /**
+     * 从 Cookie 头里解析官网持久化的用户存储(KUNGalgameUser Cookie)。
+     * 登录后官网前端会把 pinia KUNGalgameUser 存储序列化进同名 Cookie,
+     * 值可能是裸 JSON 或 URL 编码的 JSON,两种都试。
+     */
+    fun parseKungalUserCookie(cookies: String): KungalUser? {
+        val value = cookies.split(";")
+            .mapNotNull { part ->
+                val kv = part.trim().split("=", limit = 2)
+                if (kv.size == 2 && kv[0].trim() == "KUNGalgameUser") kv[1] else null
+            }
+            .firstOrNull() ?: return null
+        val decoded = runCatching { java.net.URLDecoder.decode(value, "UTF-8") }.getOrNull()
+        val candidates = listOf(value, decoded).filterNotNull().distinct()
+        for (c in candidates) {
+            val el = runCatching { JsonParser.parseString(c) }.getOrNull() ?: continue
+            if (!el.isJsonObject) continue
+            val o = el.asJsonObject
+            val name = o.get("name")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                ?.asString.orEmpty()
+            if (name.isBlank()) continue
+            val avatar = avatarOf(o.get("avatar")).ifBlank { avatarOf(o.get("avatarMin")) }
+            return KungalUser(
+                id = o.get("sub")?.takeIf { it.isJsonPrimitive }?.asString?.toLongOrNull() ?: 0L,
+                name = name,
+                avatar = avatar,
+            )
+        }
+        return null
+    }
+
+    /**
+     * 从官网首页的 __NUXT_DATA__ 载荷里提取当前登录用户。
+     * 官网是服务端渲染:登录后首页 HTML 里的 pinia KUNGalgameUser 存储对象
+     * 就带 name/avatar 等字段,不需要任何接口。
+     */
+    suspend fun currentUserFromHomepage(cookies: String): KungalUser? {
+        val now = System.currentTimeMillis()
+        if (now - lastHomepageTryAt < 10_000) return lastHomepageUser
+        lastHomepageTryAt = now
+        val found = try {
+            val html = fetchWithCookiesOrNull(BASE, cookies)
+            val m = html?.let {
+                Regex("""<script[^>]*id="__NUXT_DATA__"[^>]*>([\s\S]*?)</script>""").find(it)
+            }
+            val arr = m?.let { runCatching { JsonParser.parseString(it.groupValues[1]).asJsonArray }.getOrNull() }
+            arr?.let { extractUserFromPayload(it) }
+        } catch (e: Exception) {
+            null
+        }
+        lastHomepageUser = found
+        return found
+    }
+
+    /**
+     * devalue 载荷解引用:指针有两种形态——纯数字(直接是下标),
+     * 以及 ["Ref",下标] / ["EmptyRef",下标] 数组(重复出现的值去重后变成引用)。
+     * 2026-09 实测:登录后的首页里 name 就是 ["Ref",1619] 形态,只按数字解析会扑空
+     */
+    private fun derefPayload(arr: JsonArray, el: JsonElement, depth: Int = 0): JsonElement {
+        var v = el
+        var d = depth
+        while (d < 12) {
+            when {
+                v.isJsonPrimitive && v.asJsonPrimitive.isNumber -> {
+                    val idx = v.asInt
+                    if (idx < 0 || idx >= arr.size()) break
+                    v = arr[idx]
+                    d++
+                }
+                v.isJsonArray && v.asJsonArray.size() >= 2 -> {
+                    val a = v.asJsonArray
+                    val tag = a[0].takeIf { it.isJsonPrimitive }?.asString
+                    val idxEl = a[1]
+                    if ((tag == "Ref" || tag == "EmptyRef") && idxEl.isJsonPrimitive &&
+                        idxEl.asJsonPrimitive.isNumber
+                    ) {
+                        val idx = idxEl.asInt
+                        if (idx < 0 || idx >= arr.size()) break
+                        v = arr[idx]
+                        d++
+                    } else break
+                }
+                else -> break
+            }
+        }
+        return v
+    }
+
+    /** 在载荷数组里找当前用户:按 pinia KUNGalgameUser 存储对象的字段签名匹配 */
+    private fun extractUserFromPayload(arr: JsonArray): KungalUser? {
+        fun deref(el: JsonElement, depth: Int = 0): JsonElement = derefPayload(arr, el, depth)
+        fun str(el: JsonElement?): String {
+            val v = deref(el ?: return "")
+            return if (v.isJsonPrimitive && v.asJsonPrimitive.isString) v.asString else ""
+        }
+        fun avatarOf(el: JsonElement?): String {
+            val v = deref(el ?: return "")
+            var avatar = when {
+                v.isJsonPrimitive -> v.asString
+                v.isJsonArray -> str(v.asJsonArray.firstOrNull())
+                v.isJsonObject -> str(v.asJsonObject.get("url")).ifBlank { str(v.asJsonObject.get("src")) }
+                else -> ""
+            }
+            if (avatar.isNotBlank() && avatar.startsWith("/")) avatar = BASE + avatar
+            return avatar
+        }
+        // KUNGalgameUser 存储对象:同时带 moemoepoint 与 isCheckIn/dailyCheckIn 等专属字段
+        // (未登录时这些字段的值是 EmptyRef,解不出 name,自然跳过)
+        for (el in arr) {
+            if (!el.isJsonObject) continue
+            val o = el.asJsonObject
+            if (o.get("moemoepoint") == null) continue
+            if (o.get("isCheckIn") == null && o.get("dailyCheckIn") == null &&
+                o.get("dailyToolsetUploadBytes") == null
+            ) continue
+            val name = str(o.get("name"))
+            if (name.isBlank()) continue
+            return KungalUser(
+                id = str(o.get("sub")).toLongOrNull() ?: 0L,
+                name = name,
+                avatar = avatarOf(o.get("avatar")).ifBlank { avatarOf(o.get("avatarMin")) },
+            )
+        }
+        return null
     }
 
     /** 从返回 JSON 里找 user 对象:优先根下的 user 字段,其次 data.user(两种包裹方式都兼容) */
