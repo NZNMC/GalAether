@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,7 +25,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -43,10 +47,11 @@ fun HomeScreen(
     uiSettings: UiSettings,
     homeViewModel: HomeViewModel = viewModel(),
 ) {
-    // 未开启 NSFW 时过滤限制级作品(随机接口无标记,直接隐藏随机推荐)
+    // 未开启 NSFW 时过滤限制级作品(随机接口无标记,今日推荐逐个查详情过滤)
     val latest = if (uiSettings.showNsfw) homeViewModel.latest
     else homeViewModel.latest.filterNot { it.restricted }
-    val random = if (uiSettings.showNsfw) homeViewModel.random else emptyList()
+    // 进入首页时加载今日推荐;NSFW 开关变化时自动重新过滤
+    LaunchedEffect(uiSettings.showNsfw) { homeViewModel.rollDaily(uiSettings.showNsfw) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -91,10 +96,54 @@ fun HomeScreen(
             }
 
             else -> {
-                if (random.isNotEmpty()) {
+                if (homeViewModel.daily.isNotEmpty() || homeViewModel.dailyLoading) {
+                    item {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "今日推荐",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { homeViewModel.rerollDaily(uiSettings.showNsfw) }) {
+                                Text("换一批")
+                            }
+                        }
+                    }
+                    if (homeViewModel.daily.isEmpty()) {
+                        item {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Text("正在为你挑选…", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    } else {
+                        item {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                            ) {
+                                items(homeViewModel.daily, key = { it.gameId }) { game ->
+                                    CoverCard(
+                                        game,
+                                        onClick = { onOpenGame(game) },
+                                        modifier = Modifier.width(140.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (homeViewModel.forYou.isNotEmpty()) {
                     item {
                         Text(
-                            "随机推荐",
+                            "猜你喜欢",
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
@@ -104,7 +153,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp),
                         ) {
-                            items(random, key = { it.gameId }) { game ->
+                            items(homeViewModel.forYou, key = { it.gameId }) { game ->
                                 CoverCard(
                                     game,
                                     onClick = { onOpenGame(game) },
@@ -130,7 +179,7 @@ fun HomeScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
-                if (latest.isEmpty() && random.isEmpty()) {
+                if (latest.isEmpty() && homeViewModel.daily.isEmpty() && homeViewModel.forYou.isEmpty()) {
                     item {
                         Text(
                             "当前列表为空(已按设置隐藏限制级内容,可在设置中打开)",
