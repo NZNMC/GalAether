@@ -25,6 +25,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -88,6 +90,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.galstruo.app.data.archive.SmartArchive
 import com.galstruo.app.data.kungal.KungalApi
+import com.galstruo.app.data.kungal.KungalAuth
 import com.galstruo.app.data.kungal.KungalResource
 import com.galstruo.app.data.download.DownloadManager
 import com.galstruo.app.data.download.DownloadState
@@ -95,6 +98,8 @@ import com.galstruo.app.data.download.DownloadTask
 import com.galstruo.app.data.local.FavoriteGame
 import com.galstruo.app.data.local.FavoriteStore
 import com.galstruo.app.data.local.HistoryStore
+import com.galstruo.app.data.searchgal.SearchGalItem
+import com.galstruo.app.data.searchgal.SearchGalPlatform
 import com.galstruo.app.data.shinnku.ShinnkuFile
 import com.galstruo.app.data.shinnku.VersionType
 import com.galstruo.app.data.ymgal.GameDetail
@@ -121,6 +126,13 @@ fun GameDetailScreen(
     // 打开详情页自动记录浏览历史
     LaunchedEffect(detail) {
         detail?.let { HistoryStore.record(it.gid, it.displayName, it.coverUrl) }
+    }
+    // 登录鲲galgame 后回到详情页:自动重搜网盘资源(升级为官方接口)
+    val kungalUser by KungalAuth.user.collectAsStateWithLifecycle()
+    LaunchedEffect(kungalUser) {
+        if (kungalUser != null && detailViewModel.kungalSearched) {
+            detailViewModel.searchKungal()
+        }
     }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -232,6 +244,12 @@ private fun DetailContent(
 
     fun viewLinks(res: KungalResource) {
         linksFor = res
+        // 官方接口直接带链接,不用再解析网页
+        if (res.links.isNotEmpty()) {
+            links = res.links
+            linksLoading = false
+            return
+        }
         links = emptyList()
         linksLoading = true
         scope.launch {
@@ -342,6 +360,8 @@ private fun DetailContent(
                 DownloadHeader(vm, typeFilter, onFilter = { typeFilter = it }, onFind = vm::searchResources)
                 Spacer(Modifier.height(12.dp))
                 KungalHeader(vm)
+                Spacer(Modifier.height(12.dp))
+                SearchGalHeader(vm)
                 Spacer(Modifier.height(20.dp))
                 Text("简介", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
@@ -371,6 +391,25 @@ private fun DetailContent(
         }
         items(vm.kungalResources, key = { "kungal-${it.id}" }) { res ->
             KungalResourceRow(res, onViewLinks = { viewLinks(res) })
+        }
+        if (vm.sgPlatforms.isNotEmpty()) {
+            item {
+                Text(
+                    "以下资源来自 SearchGal 聚合搜索(各资源站发布页,点「打开网页」查看)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(50))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+            vm.sgPlatforms.forEach { platform ->
+                item(key = "sg-head-${platform.name}") { SearchGalPlatformHeader(platform) }
+                items(platform.items, key = { "sg-${platform.name}-${it.url}" }) { item ->
+                    SearchGalItemRow(item)
+                }
+            }
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
@@ -427,6 +466,19 @@ private fun DetailContent(
                     links.isEmpty() -> Text("公开页面里没有提取到下载链接,请在网页中查看。")
 
                     else -> Column {
+                        // 官方接口给出的提取码/解压密码/备注
+                        if (res.code.isNotBlank() || res.password.isNotBlank() || res.note.isNotBlank()) {
+                            Text(
+                                buildString {
+                                    if (res.code.isNotBlank()) append("提取码:${res.code}    ")
+                                    if (res.password.isNotBlank()) append("解压密码:${res.password}")
+                                    if (res.note.isNotBlank()) append("\n备注:${res.note}")
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
                         Text(
                             "点击「复制」复制链接,或「打开」直接唤起网盘 App / 浏览器",
                             style = MaterialTheme.typography.labelSmall,
@@ -490,21 +542,225 @@ private fun KungalHeader(vm: GameDetailViewModel) {
 
                 vm.kungalResources.isEmpty() -> Column {
                     Text(
-                        "点「查找下载资源」会连同真红小站一起搜索。",
+                        "点「查找下载资源」会连同真红小站、更多资源站一起搜索。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = vm::searchKungal) { Text("单独搜索网盘资源") }
                 }
 
+                else -> Column {
+                    Text(
+                        if (vm.kungalOfficial) {
+                            "找到 ${vm.kungalResources.size} 个网盘资源(官方接口,含提取码/解压密码),点「查看链接」获取下载链接。"
+                        } else {
+                            "找到 ${vm.kungalResources.size} 个网盘资源,点「查看链接」获取百度网盘等下载链接,可直接复制或唤起网盘 App。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!vm.kungalOfficial) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "登录鲲galgame 账号可获取更全的官方资源(含提取码/解压密码),在「我的」页登录。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 「更多资源站」卡片头部:SearchGal 聚合搜索(27+ 资源站,流式进度) */
+@Composable
+private fun SearchGalHeader(vm: GameDetailViewModel) {
+    Card(
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text("更多资源站", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "来自 SearchGal 聚合搜索,一次搜索 27+ 个资源站;结果是发布页链接,点「打开网页」查看",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            val progress = vm.sgProgress
+            when {
+                vm.sgLoading && progress != null && vm.sgPlatforms.isEmpty() -> Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            "已搜索 ${progress.first}/${progress.second} 个平台…",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = {
+                            if (progress.second > 0) progress.first.toFloat() / progress.second else 0f
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50)),
+                    )
+                }
+
+                vm.sgLoading -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        if (vm.sgPlatforms.isEmpty()) "正在搜索 27+ 个资源站…"
+                        else "继续搜索中(已找到 ${vm.sgPlatforms.size} 个平台)…",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                vm.sgPlatforms.isEmpty() && vm.sgSearched -> Column {
+                    Text(
+                        vm.sgError ?: "没有找到资源",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = vm::searchMoreSites) { Text("重新搜索") }
+                }
+
+                vm.sgPlatforms.isEmpty() -> Column {
+                    Text(
+                        "点「查找下载资源」会连同真红小站、鲲galgame 一起搜索。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = vm::searchMoreSites) { Text("搜索更多资源站") }
+                }
+
                 else -> Text(
-                    "找到 ${vm.kungalResources.size} 个网盘资源,点「查看链接」获取百度网盘等下载链接,可直接复制或唤起网盘 App。",
+                    "在 ${vm.sgPlatforms.size} 个资源站找到结果,点「打开网页」查看发布页,「复制链接」可保存分享。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     }
+}
+
+/** 平台小标题:彩色圆点 + 平台名 + 标签(免登录/需登录等) */
+@Composable
+private fun SearchGalPlatformHeader(platform: SearchGalPlatform) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    ) {
+        Box(
+            Modifier
+                .size(10.dp)
+                .background(platformDotColor(platform.color), CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+        )
+        Text(
+            platform.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        platform.tags.forEach { tag ->
+            Text(
+                tagLabel(tag),
+                style = MaterialTheme.typography.labelSmall,
+                color = tagColor(tag),
+                modifier = Modifier
+                    .background(tagColor(tag).copy(alpha = 0.14f), RoundedCornerShape(50))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+/** 一条聚合搜索结果:资源名 + 打开网页/复制链接 */
+@Composable
+private fun SearchGalItemRow(item: SearchGalItem) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                item.url,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        TextButton(onClick = {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.url)))
+            } catch (e: Exception) {
+                Toast.makeText(context, "无法打开链接", Toast.LENGTH_SHORT).show()
+            }
+        }) { Text("打开网页") }
+        TextButton(onClick = {
+            clipboard.setText(AnnotatedString(item.url))
+            Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
+        }) { Text("复制链接") }
+    }
+}
+
+/** 标签转中文(SearchGal 平台标签) */
+private fun tagLabel(tag: String): String = when (tag) {
+    "NoReq" -> "免登录"
+    "Login" -> "需登录"
+    "LoginPay" -> "需登录付费"
+    "magic" -> "魔法"
+    "SuDrive" -> "快速网盘"
+    "MixDrive" -> "混合网盘"
+    else -> tag
+}
+
+/** 标签配色:免登录=绿,需登录=橙,付费=红 */
+@Composable
+private fun tagColor(tag: String): androidx.compose.ui.graphics.Color = when {
+    tag == "NoReq" -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
+    tag.contains("Pay") -> androidx.compose.ui.graphics.Color(0xFFC62828)
+    tag.contains("Login") -> androidx.compose.ui.graphics.Color(0xFFEF6C00)
+    else -> MaterialTheme.colorScheme.tertiary
+}
+
+/** 平台圆点颜色(SearchGal 返回的 color 字段是颜色名) */
+@Composable
+private fun platformDotColor(colorName: String): androidx.compose.ui.graphics.Color = when (colorName.lowercase()) {
+    "red" -> androidx.compose.ui.graphics.Color(0xFFE53935)
+    "lime" -> androidx.compose.ui.graphics.Color(0xFF7CB342)
+    "white" -> androidx.compose.ui.graphics.Color(0xFFEEEEEE)
+    "green" -> androidx.compose.ui.graphics.Color(0xFF43A047)
+    "blue" -> androidx.compose.ui.graphics.Color(0xFF1E88E5)
+    "yellow" -> androidx.compose.ui.graphics.Color(0xFFFDD835)
+    "orange" -> androidx.compose.ui.graphics.Color(0xFFFB8C00)
+    "pink" -> androidx.compose.ui.graphics.Color(0xFFD81B60)
+    "purple" -> androidx.compose.ui.graphics.Color(0xFF8E24AA)
+    "cyan" -> androidx.compose.ui.graphics.Color(0xFF00ACC1)
+    else -> androidx.compose.ui.graphics.Color(0xFF9E9E9E)
 }
 
 /** 鲲galgame 资源行(带来源标签) */
@@ -533,6 +789,16 @@ private fun KungalResourceRow(res: KungalResource, onViewLinks: () -> Unit) {
                             .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     )
+                    if (res.official) {
+                        Text(
+                            "官方接口",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
                     if (res.size.isNotBlank()) {
                         Text(
                             res.size,
@@ -540,6 +806,18 @@ private fun KungalResourceRow(res: KungalResource, onViewLinks: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                if (res.code.isNotBlank() || res.password.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        buildString {
+                            if (res.code.isNotBlank()) append("提取码 ${res.code}")
+                            if (res.code.isNotBlank() && res.password.isNotBlank()) append(" · ")
+                            if (res.password.isNotBlank()) append("解压码 ${res.password}")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
             Spacer(Modifier.width(12.dp))

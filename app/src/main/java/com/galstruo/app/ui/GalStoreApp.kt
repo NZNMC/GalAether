@@ -33,6 +33,7 @@ import com.galstruo.app.ui.screens.FavoritesScreen
 import com.galstruo.app.ui.screens.GameDetailScreen
 import com.galstruo.app.ui.screens.HistoryScreen
 import com.galstruo.app.ui.screens.HomeScreen
+import com.galstruo.app.ui.screens.KungalLoginScreen
 import com.galstruo.app.ui.screens.ProfileScreen
 import com.galstruo.app.ui.screens.SearchScreen
 import com.galstruo.app.ui.screens.ThemeSettingsScreen
@@ -114,7 +115,11 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
                 ProfileScreen(
                     onOpenThemeSettings = { navController.navigate("theme") },
                     onOpenHistory = { navController.navigate("history") },
+                    onOpenKungalLogin = { navController.navigate("kungalLogin") },
                 )
+            }
+            composable("kungalLogin") {
+                KungalLoginScreen(onBack = { navController.popBackStack() })
             }
             composable("theme") {
                 ThemeSettingsScreen(
