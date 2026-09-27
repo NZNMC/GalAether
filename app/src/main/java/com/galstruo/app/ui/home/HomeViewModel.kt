@@ -80,9 +80,9 @@ class HomeViewModel : ViewModel() {
     }
 
     /**
-     * 今日推荐:目标凑满 8 部。
-     * 关闭 NSFW 时随机池里很多是限制级(还有查详情失败的),一批 8 部过滤完可能只剩 1-2 个,
-     * 所以不够就再随机一批补上,最多补 4 轮(避免接口请求过多);仍不够就展示现有的。
+     * 今日推荐:目标凑满 8 部,两级来源保证不空:
+     * 1. 随机推荐池最多抽 4 轮(关闭 NSFW 时逐个查详情过滤限制级;池子里限制级多、查详情还常失败,抽完经常所剩无几);
+     * 2. 还不够时用最近发行的作品补齐(发行区间接口自带 restricted 标记,直接过滤,不用逐个查详情,稳定有结果)。
      */
     private suspend fun collectDaily(showNsfw: Boolean): List<GameItem> {
         val picked = mutableListOf<GameItem>()
@@ -93,7 +93,19 @@ class HomeViewModel : ViewModel() {
             val batch = YmgalRepository.random(8).filter { seen.add(it.gameId) }
             picked += if (showNsfw) batch else filterSafe(batch)
         }
-        return picked.take(8)
+        if (picked.size < 8) {
+            try {
+                val fill = YmgalRepository.latest(45)
+                    .filter { seen.add(it.gameId) }
+                    .let { if (showNsfw) it else it.filterNot { it.restricted } }
+                    .shuffled()
+                    .take(8 - picked.size)
+                picked += fill
+            } catch (e: Exception) {
+                // 补齐失败就算了,有多少展示多少
+            }
+        }
+        return picked
     }
 
     /** 随机接口不返回限制级标记:关闭 NSFW 时逐个查详情,过滤限制级(查失败的一并排除,保证不越界) */
