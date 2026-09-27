@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import com.galstruo.app.BuildConfig
 import com.galstruo.app.data.kungal.KungalAuth
 import com.galstruo.app.ui.components.HistoryIcon
+import com.galstruo.app.ui.components.pressScale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +60,9 @@ fun ProfileScreen(
                 headlineContent = { Text("鲲galgame 账号") },
                 supportingContent = { Text("登录后网盘资源更全,含提取码/解压密码") },
                 leadingContent = { Icon(Icons.Filled.AccountCircle, contentDescription = null) },
-                modifier = Modifier.clickable { onOpenKungalLogin() },
+                modifier = Modifier
+                    .pressScale()
+                    .clickable { onOpenKungalLogin() },
             )
         } else {
             ListItem(
@@ -92,23 +95,29 @@ fun ProfileScreen(
             headlineContent = { Text("设置") },
             supportingContent = { Text("主题 · 深色模式 · 内容 · 数据与存储 · 网络代理") },
             leadingContent = { Icon(Icons.Filled.Settings, contentDescription = null) },
-            modifier = Modifier.clickable { onOpenThemeSettings() },
+            modifier = Modifier
+                .pressScale()
+                .clickable { onOpenThemeSettings() },
         )
         ListItem(
             headlineContent = { Text("浏览历史") },
             supportingContent = { Text("打开过的游戏自动记录") },
             leadingContent = { Icon(HistoryIcon, contentDescription = null) },
-            modifier = Modifier.clickable { onOpenHistory() },
+            modifier = Modifier
+                .pressScale()
+                .clickable { onOpenHistory() },
         )
         ListItem(
             headlineContent = { Text("关于") },
             supportingContent = { Text("GalAether ${BuildConfig.VERSION_NAME} · 点击查看项目主页") },
             leadingContent = { Icon(Icons.Filled.Info, contentDescription = null) },
-            modifier = Modifier.clickable {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NZNMC/GalAether"))
-                )
-            },
+            modifier = Modifier
+                .pressScale()
+                .clickable {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NZNMC/GalAether"))
+                    )
+                },
         )
     }
 

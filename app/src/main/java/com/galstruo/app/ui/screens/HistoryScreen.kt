@@ -42,6 +42,7 @@ import com.galstruo.app.data.local.HistoryEntry
 import com.galstruo.app.data.local.HistoryStore
 import com.galstruo.app.ui.components.EmptyState
 import com.galstruo.app.ui.components.HistoryIcon
+import com.galstruo.app.ui.components.pressScale
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -107,7 +108,8 @@ fun HistoryScreen(onBack: () -> Unit, onOpenGame: (Long) -> Unit) {
 private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(onClick = onClick, shape = RoundedCornerShape(28.dp), modifier = modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 6.dp)) {
+        .padding(horizontal = 16.dp, vertical = 6.dp)
+        .pressScale()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = entry.coverUrl,

@@ -1,13 +1,23 @@
 package com.galstruo.app.ui
 
 import android.net.Uri
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -15,7 +25,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +39,7 @@ import androidx.navigation.navArgument
 import com.galstruo.app.data.SettingsStore
 import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.ymgal.GameItem
+import com.galstruo.app.ui.components.BounceIcon
 import com.galstruo.app.ui.components.DownloadIcon
 import com.galstruo.app.ui.screens.CategoryScreen
 import com.galstruo.app.ui.screens.DownloadsScreen
@@ -62,7 +76,16 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
         bottomBar = {
             // 搜索页与详情页全屏展示,不显示底部导航
             if (currentRoute in bottomRoutes) {
-                NavigationBar {
+                NavigationBar(
+                    // 圆润悬浮式:与屏幕边缘留出间距,大圆角 + 阴影,像浮在内容上方
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp)
+                        .shadow(18.dp, RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(28.dp)),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 3.dp,
+                ) {
                     bottomItems.forEach { item ->
                         NavigationBarItem(
                             selected = currentRoute == item.route,
@@ -75,7 +98,14 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            icon = {
+                                BounceIcon(
+                                    selected = currentRoute == item.route,
+                                    icon = item.icon,
+                                    contentDescription = item.label,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            },
                             label = { Text(item.label) },
                         )
                     }
@@ -87,6 +117,17 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
             navController = navController,
             startDestination = "home",
             modifier = Modifier.padding(innerPadding),
+            // 页面切换动画:进入=淡入+上滑+轻微放大,返回=淡入,退出=淡出+下滑
+            enterTransition = {
+                fadeIn(tween(220)) +
+                    slideInVertically(tween(300), initialOffsetY = { it / 12 }) +
+                    scaleIn(tween(300), initialScale = 0.95f)
+            },
+            exitTransition = { fadeOut(tween(150)) },
+            popEnterTransition = { fadeIn(tween(220)) },
+            popExitTransition = {
+                fadeOut(tween(180)) + slideOutVertically(tween(260), targetOffsetY = { it / 12 })
+            },
         ) {
             composable("home") {
                 HomeScreen(

@@ -36,6 +36,7 @@ import coil.compose.AsyncImage
 import com.galstruo.app.data.local.FavoriteGame
 import com.galstruo.app.data.local.FavoriteStore
 import com.galstruo.app.ui.components.EmptyState
+import com.galstruo.app.ui.components.pressScale
 
 /** 收藏页:展示收藏的游戏,点心形可以取消收藏 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -74,7 +75,8 @@ private fun FavoriteRow(
 ) {
     Card(onClick = onClick, shape = RoundedCornerShape(28.dp), modifier = modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 6.dp)) {
+        .padding(horizontal = 16.dp, vertical = 6.dp)
+        .pressScale()) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = fav.coverUrl,

@@ -23,6 +23,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,12 +77,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -103,6 +108,7 @@ import com.galstruo.app.data.searchgal.SearchGalPlatform
 import com.galstruo.app.data.shinnku.ShinnkuFile
 import com.galstruo.app.data.shinnku.VersionType
 import com.galstruo.app.data.ymgal.GameDetail
+import com.galstruo.app.ui.components.pressScale
 import com.galstruo.app.ui.detail.GameDetailViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -137,11 +143,10 @@ fun GameDetailScreen(
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                Text(
-                    detail?.displayName ?: "游戏详情",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // 沉浸式封面:标题压在图下方,顶部栏不再重复显示(未加载时占位)
+                if (detail == null) {
+                    Text("游戏详情", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
@@ -319,50 +324,111 @@ private fun DetailContent(
     }
 
     val filtered = if (typeFilter == null) vm.resources else vm.resources.filter { it.type == typeFilter }
+    // 资源卡当前选中的来源:0=下载资源 1=网盘资源 2=更多资源站
+    var resourceTab by remember { mutableStateOf(0) }
     LazyColumn(Modifier.fillMaxSize()) {
+        // 沉浸式封面:标题通过渐变遮罩压在封面底部
         item {
-            AsyncImage(
-                model = detail.coverUrl,
-                contentDescription = detail.displayName,
-                contentScale = ContentScale.Crop,
+            Box {
+                AsyncImage(
+                    model = detail.coverUrl,
+                    contentDescription = detail.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.6f),
+                )
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.45f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.78f),
+                            )
+                        ),
+                )
+                Column(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Text(
+                        detail.displayName,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
+                        Text(
+                            detail.name.orEmpty(),
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        }
+        // 信息 chips 行(封面下方,横向可滚动)
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f),
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                orgName?.let { InfoChip(it) }
+                detail.releaseDate?.let { InfoChip(it) }
+                // 平台信息在各发行版本(releases)里
+                detail.releases.orEmpty()
+                    .mapNotNull { it.platform }
+                    .distinct()
+                    .forEach { InfoChip(platformLabel(it)) }
+                if (detail.haveChinese) InfoChip("官方中文")
+                if (detail.restricted) InfoChip("限制级")
+            }
+        }
+        // 查找资源:三来源合成一张卡,顶部 pill 切换
+        item {
+            ResourceCard(
+                vm = vm,
+                tab = resourceTab,
+                onTab = { resourceTab = it },
+                typeFilter = typeFilter,
+                onFilter = { typeFilter = it },
+                onFind = vm::searchResources,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
-        item {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    detail.displayName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+        // 资源行:只显示当前选中的来源,切换时有滑入滑出动画
+        when (resourceTab) {
+            0 -> items(filtered, key = { it.filePath }) { file ->
+                ResourceRow(
+                    file,
+                    tasks[file.downloadUrl()],
+                    onDownload = { requestDownload(file) },
+                    modifier = Modifier.animateItem(),
                 )
-                if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
-                    Text(
-                        detail.name.orEmpty(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            }
+
+            1 -> items(vm.kungalResources, key = { "kungal-${it.id}" }) { res ->
+                KungalResourceRow(
+                    res,
+                    onViewLinks = { viewLinks(res) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+
+            else -> vm.sgPlatforms.forEach { platform ->
+                item(key = "sg-head-${platform.name}") { SearchGalPlatformHeader(platform) }
+                items(platform.items, key = { "sg-${platform.name}-${it.url}" }) { item ->
+                    SearchGalItemRow(item, modifier = Modifier.animateItem())
                 }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    orgName?.let { InfoChip(it) }
-                    detail.releaseDate?.let { InfoChip(it) }
-                    // 平台信息在各发行版本(releases)里
-                    detail.releases.orEmpty()
-                        .mapNotNull { it.platform }
-                        .distinct()
-                        .forEach { InfoChip(platformLabel(it)) }
-                    if (detail.haveChinese) InfoChip("官方中文")
-                    if (detail.restricted) InfoChip("限制级")
-                }
-                Spacer(Modifier.height(20.dp))
-                DownloadHeader(vm, typeFilter, onFilter = { typeFilter = it }, onFind = vm::searchResources)
-                Spacer(Modifier.height(12.dp))
-                KungalHeader(vm)
-                Spacer(Modifier.height(12.dp))
-                SearchGalHeader(vm)
-                Spacer(Modifier.height(20.dp))
+            }
+        }
+        item {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("简介", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -370,45 +436,6 @@ private fun DetailContent(
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 24.sp,
                 )
-            }
-        }
-        items(filtered, key = { it.filePath }) { file ->
-            ResourceRow(file, tasks[file.downloadUrl()], onDownload = { requestDownload(file) })
-        }
-        if (vm.kungalResources.isNotEmpty()) {
-            item {
-                // 资源来源标识:与真红小站资源区分
-                Text(
-                    "以下是来自鲲galgame(kungal.com)的网盘资源",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
-                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-        }
-        items(vm.kungalResources, key = { "kungal-${it.id}" }) { res ->
-            KungalResourceRow(res, onViewLinks = { viewLinks(res) })
-        }
-        if (vm.sgPlatforms.isNotEmpty()) {
-            item {
-                Text(
-                    "以下资源来自 SearchGal 聚合搜索(各资源站发布页,点「打开网页」查看)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
-                        .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(50))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-            vm.sgPlatforms.forEach { platform ->
-                item(key = "sg-head-${platform.name}") { SearchGalPlatformHeader(platform) }
-                items(platform.items, key = { "sg-${platform.name}-${it.url}" }) { item ->
-                    SearchGalItemRow(item)
-                }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
@@ -504,154 +531,237 @@ private fun DetailContent(
     }
 }
 
-/** 鲲galgame 网盘资源区头部(始终显示,自带搜索按钮) */
+/** 「网盘资源」tab 内容:鲲galgame 搜索状态 */
 @Composable
-private fun KungalHeader(vm: GameDetailViewModel) {
+private fun KungalTabContent(vm: GameDetailViewModel) {
+    Text(
+        "来自鲲galgame(kungal.com),网盘链接只复制/唤起,不直接下载",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    when {
+        vm.kungalLoading -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text("正在搜索鲲galgame…", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        vm.kungalResources.isEmpty() && vm.kungalSearched -> Column {
+            Text(
+                vm.kungalError ?: "没有找到网盘资源",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = vm::searchKungal) { Text("重新搜索") }
+        }
+
+        vm.kungalResources.isEmpty() -> Column {
+            Text(
+                "点「查找下载资源」会连同真红小站、更多资源站一起搜索。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = vm::searchKungal) { Text("单独搜索网盘资源") }
+        }
+
+        else -> Column {
+            Text(
+                if (vm.kungalOfficial) {
+                    "找到 ${vm.kungalResources.size} 个网盘资源(官方接口,含提取码/解压密码),点「查看链接」获取下载链接。"
+                } else {
+                    "找到 ${vm.kungalResources.size} 个网盘资源,点「查看链接」获取百度网盘等下载链接,可直接复制或唤起网盘 App。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!vm.kungalOfficial) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "登录鲲galgame 账号可获取更全的官方资源(含提取码/解压密码),在「我的」页登录。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+/** 「更多资源站」tab 内容:SearchGal 聚合搜索(27+ 资源站,流式进度) */
+@Composable
+private fun SearchGalTabContent(vm: GameDetailViewModel) {
+    Text(
+        "来自 SearchGal 聚合搜索,一次搜索 27+ 个资源站;结果是发布页链接,点「打开网页」查看",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    val progress = vm.sgProgress
+    when {
+        vm.sgLoading && progress != null && vm.sgPlatforms.isEmpty() -> Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(
+                    "已搜索 ${progress.first}/${progress.second} 个平台…",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = {
+                    if (progress.second > 0) progress.first.toFloat() / progress.second else 0f
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(50)),
+            )
+        }
+
+        vm.sgLoading -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text(
+                if (vm.sgPlatforms.isEmpty()) "正在搜索 27+ 个资源站…"
+                else "继续搜索中(已找到 ${vm.sgPlatforms.size} 个平台)…",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        vm.sgPlatforms.isEmpty() && vm.sgSearched -> Column {
+            Text(
+                vm.sgError ?: "没有找到资源",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = vm::searchMoreSites) { Text("重新搜索") }
+        }
+
+        vm.sgPlatforms.isEmpty() -> Column {
+            Text(
+                "点「查找下载资源」会连同真红小站、鲲galgame 一起搜索。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = vm::searchMoreSites) { Text("搜索更多资源站") }
+        }
+
+        else -> Text(
+            "在 ${vm.sgPlatforms.size} 个资源站找到结果,点「打开网页」查看发布页,「复制链接」可保存分享。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** 查找资源卡:三来源合成一张卡,顶部 pill 切换,内容随 tab 左右滑动切换 */
+@Composable
+private fun ResourceCard(
+    vm: GameDetailViewModel,
+    tab: Int,
+    onTab: (Int) -> Unit,
+    typeFilter: VersionType?,
+    onFilter: (VersionType?) -> Unit,
+    onFind: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Card(
         shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("网盘资源", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "来自鲲galgame(kungal.com),网盘链接只复制/唤起,不直接下载",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            when {
-                vm.kungalLoading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("正在搜索鲲galgame…", style = MaterialTheme.typography.bodyMedium)
-                }
-
-                vm.kungalResources.isEmpty() && vm.kungalSearched -> Column {
-                    Text(
-                        vm.kungalError ?: "没有找到网盘资源",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        RoundedCornerShape(50),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = vm::searchKungal) { Text("重新搜索") }
-                }
-
-                vm.kungalResources.isEmpty() -> Column {
-                    Text(
-                        "点「查找下载资源」会连同真红小站、更多资源站一起搜索。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = vm::searchKungal) { Text("单独搜索网盘资源") }
-                }
-
-                else -> Column {
-                    Text(
-                        if (vm.kungalOfficial) {
-                            "找到 ${vm.kungalResources.size} 个网盘资源(官方接口,含提取码/解压密码),点「查看链接」获取下载链接。"
-                        } else {
-                            "找到 ${vm.kungalResources.size} 个网盘资源,点「查看链接」获取百度网盘等下载链接,可直接复制或唤起网盘 App。"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!vm.kungalOfficial) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "登录鲲galgame 账号可获取更全的官方资源(含提取码/解压密码),在「我的」页登录。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                    .padding(3.dp),
+            ) {
+                ResourceTabPill("下载资源", tab == 0, { onTab(0) }, Modifier.weight(1f))
+                ResourceTabPill("网盘资源", tab == 1, { onTab(1) }, Modifier.weight(1f))
+                ResourceTabPill("更多资源站", tab == 2, { onTab(2) }, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(14.dp))
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    // 向右切换:新内容从右进、旧内容向左出;向左切换则相反
+                    if (targetState > initialState) {
+                        (slideInHorizontally { it / 4 } + fadeIn()).togetherWith(
+                            slideOutHorizontally { -it / 4 } + fadeOut()
+                        )
+                    } else {
+                        (slideInHorizontally { -it / 4 } + fadeIn()).togetherWith(
+                            slideOutHorizontally { it / 4 } + fadeOut()
                         )
                     }
+                },
+                label = "resourceTab",
+            ) { t ->
+                when (t) {
+                    0 -> DownloadTabContent(vm, typeFilter, onFilter, onFind)
+                    1 -> KungalTabContent(vm)
+                    else -> SearchGalTabContent(vm)
                 }
             }
         }
     }
 }
 
-/** 「更多资源站」卡片头部:SearchGal 聚合搜索(27+ 资源站,流式进度) */
+/** 资源卡顶部切换 pill:选中时先缩小再弹回,像果冻 */
 @Composable
-private fun SearchGalHeader(vm: GameDetailViewModel) {
-    Card(
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        ),
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("更多资源站", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "来自 SearchGal 聚合搜索,一次搜索 27+ 个资源站;结果是发布页链接,点「打开网页」查看",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun ResourceTabPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(selected) {
+        if (selected) {
+            scale.snapTo(0.82f)
+            scale.animateTo(
+                1.1f,
+                spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
             )
-            Spacer(Modifier.height(12.dp))
-            val progress = vm.sgProgress
-            when {
-                vm.sgLoading && progress != null && vm.sgPlatforms.isEmpty() -> Column {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Text(
-                            "已搜索 ${progress.first}/${progress.second} 个平台…",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    LinearProgressIndicator(
-                        progress = {
-                            if (progress.second > 0) progress.first.toFloat() / progress.second else 0f
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(50)),
-                    )
-                }
-
-                vm.sgLoading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text(
-                        if (vm.sgPlatforms.isEmpty()) "正在搜索 27+ 个资源站…"
-                        else "继续搜索中(已找到 ${vm.sgPlatforms.size} 个平台)…",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                vm.sgPlatforms.isEmpty() && vm.sgSearched -> Column {
-                    Text(
-                        vm.sgError ?: "没有找到资源",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = vm::searchMoreSites) { Text("重新搜索") }
-                }
-
-                vm.sgPlatforms.isEmpty() -> Column {
-                    Text(
-                        "点「查找下载资源」会连同真红小站、鲲galgame 一起搜索。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = vm::searchMoreSites) { Text("搜索更多资源站") }
-                }
-
-                else -> Text(
-                    "在 ${vm.sgPlatforms.size} 个资源站找到结果,点「打开网页」查看发布页,「复制链接」可保存分享。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        } else {
+            scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
         }
+    }
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+            .pressScale()
+            .clickable(onClick = onClick),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 9.dp),
+        )
     }
 }
 
@@ -689,12 +799,12 @@ private fun SearchGalPlatformHeader(platform: SearchGalPlatform) {
 
 /** 一条聚合搜索结果:资源名 + 打开网页/复制链接 */
 @Composable
-private fun SearchGalItemRow(item: SearchGalItem) {
+private fun SearchGalItemRow(item: SearchGalItem, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -765,9 +875,13 @@ private fun platformDotColor(colorName: String): androidx.compose.ui.graphics.Co
 
 /** 鲲galgame 资源行(带来源标签) */
 @Composable
-private fun KungalResourceRow(res: KungalResource, onViewLinks: () -> Unit) {
+private fun KungalResourceRow(
+    res: KungalResource,
+    onViewLinks: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -861,58 +975,50 @@ private fun LinkRow(link: String) {
     }
 }
 
-/** 下载资源区头部:搜索按钮 + 版本筛选(资源行在外部 LazyColumn 中单独渲染) */
+/** 「下载资源」tab 内容:真红小站搜索状态 + 版本筛选 chips */
 @Composable
-private fun DownloadHeader(
+private fun DownloadTabContent(
     vm: GameDetailViewModel,
     typeFilter: VersionType?,
     onFilter: (VersionType?) -> Unit,
     onFind: () -> Unit,
 ) {
     val resources = vm.resources
-    Card(
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("下载资源", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "来自真红小站(shinnku.com),支持安卓直装 / KRKR / ONS / PC 多版本",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    when {
+        vm.resourcesLoading -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text("正在搜索真红小站…", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        resources.isEmpty() && vm.resourcesSearched -> Column {
             Text(
-                "来自真红小站(shinnku.com)",
-                style = MaterialTheme.typography.labelSmall,
+                vm.resourcesError ?: "没有找到该游戏的资源",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            when {
-                vm.resourcesLoading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("正在搜索真红小站…", style = MaterialTheme.typography.bodyMedium)
-                }
+            Button(onClick = onFind) { Text("重新搜索") }
+        }
 
-                resources.isEmpty() && vm.resourcesSearched -> Column {
-                    Text(
-                        vm.resourcesError ?: "没有找到该游戏的资源",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onFind) { Text("重新搜索") }
-                }
-
-                else -> {
-                    if (resources.isEmpty()) {
-                        Text(
-                            "在真红小站搜索本游戏的下载资源,支持安卓直装 / KRKR / ONS / PC 多版本。",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    Button(onClick = onFind) { Text("查找下载资源") }
-                }
+        else -> {
+            if (resources.isEmpty()) {
+                Text(
+                    "在真红小站搜索本游戏的下载资源,支持安卓直装 / KRKR / ONS / PC 多版本。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            Button(onClick = onFind) {
+                Text(if (resources.isEmpty()) "查找下载资源" else "重新搜索")
             }
         }
     }
@@ -921,11 +1027,10 @@ private fun DownloadHeader(
         val presentTypes = remember(resources) {
             listOfNotNull(null) + resources.map { it.type }.distinct().sortedBy { it.ordinal }
         }
+        Spacer(Modifier.height(12.dp))
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .padding(top = 12.dp)
-                .horizontalScroll(rememberScrollState()),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
             presentTypes.forEach { type ->
                 FilterChip(
@@ -943,7 +1048,9 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(50),
         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .pressScale()
+            .clickable(onClick = onClick),
     ) {
         Text(
             label,
@@ -956,7 +1063,12 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ResourceRow(file: ShinnkuFile, task: DownloadTask?, onDownload: () -> Unit) {
+private fun ResourceRow(
+    file: ShinnkuFile,
+    task: DownloadTask?,
+    onDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     // 进度条平滑过渡,避免每 256KB 一跳
     val smoothProgress by animateFloatAsState(
@@ -972,7 +1084,7 @@ private fun ResourceRow(file: ShinnkuFile, task: DownloadTask?, onDownload: () -
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "downloadPress",
     )
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(

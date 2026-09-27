@@ -1,6 +1,7 @@
 package com.galstruo.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,11 +32,15 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.galstruo.app.data.ymgal.GameItem
 
-/** Pixel 风格游戏卡片:左侧封面,右侧标题/会社/日期 */
+/** Pixel 风格游戏卡片:左侧封面,右侧标题/会社/日期;按压有回弹 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, shape = RoundedCornerShape(28.dp), modifier = modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(28.dp),
+        modifier = modifier.fillMaxWidth().pressScale(),
+    ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = item.coverUrl,
@@ -124,12 +131,12 @@ fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
-/** 竖版封面卡片(用于"随机推荐"横向滑动列表) */
+/** 竖版封面卡片(用于"今日推荐/猜你喜欢"横向滑动列表):海报式,标题压在封面渐变上 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoverCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, shape = RoundedCornerShape(24.dp), modifier = modifier) {
-        Column {
+    Card(onClick = onClick, shape = RoundedCornerShape(24.dp), modifier = modifier.pressScale()) {
+        Box {
             AsyncImage(
                 model = item.coverUrl,
                 contentDescription = item.displayName,
@@ -139,12 +146,28 @@ fun CoverCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier
                     .aspectRatio(3f / 4f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             )
+            // 底部渐变遮罩,让标题在浅色封面上也可读
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.72f),
+                        )
+                    )
+            )
             Text(
                 item.displayName,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp),
             )
         }
     }

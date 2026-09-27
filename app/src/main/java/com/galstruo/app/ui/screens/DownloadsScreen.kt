@@ -59,6 +59,7 @@ import com.galstruo.app.data.download.DownloadRecord
 import com.galstruo.app.data.download.DownloadState
 import com.galstruo.app.data.download.DownloadTask
 import com.galstruo.app.ui.components.DownloadIcon
+import com.galstruo.app.ui.components.pressScale
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -224,7 +225,7 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun ActiveRow(task: DownloadTask, modifier: Modifier = Modifier) {
-    Card(shape = RoundedCornerShape(24.dp), modifier = modifier) {
+    Card(shape = RoundedCornerShape(24.dp), modifier = modifier.pressScale()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -259,7 +260,7 @@ private fun ActiveRow(task: DownloadTask, modifier: Modifier = Modifier) {
 
 @Composable
 private fun ErrorRow(rec: DownloadRecord, onDelete: () -> Unit, modifier: Modifier = Modifier) {
-    Card(shape = RoundedCornerShape(24.dp), modifier = modifier) {
+    Card(shape = RoundedCornerShape(24.dp), modifier = modifier.pressScale()) {
         Row(
             Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -305,7 +306,7 @@ private fun DoneRow(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         ),
-        modifier = modifier,
+        modifier = modifier.pressScale(),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
@@ -366,7 +367,9 @@ private fun DoneFilterChip(label: String, selected: Boolean, onClick: () -> Unit
     Surface(
         shape = RoundedCornerShape(50),
         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .pressScale()
+            .clickable(onClick = onClick),
     ) {
         Text(
             label,

@@ -1,5 +1,11 @@
 package com.galstruo.app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -28,6 +35,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +48,7 @@ import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.ui.components.CoverCard
 import com.galstruo.app.ui.components.GameCard
+import com.galstruo.app.ui.components.staggeredIn
 import com.galstruo.app.ui.home.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +64,9 @@ fun HomeScreen(
     else homeViewModel.latest.filterNot { it.restricted }
     // 进入首页时加载今日推荐;NSFW 开关变化时自动重新过滤
     LaunchedEffect(uiSettings.showNsfw) { homeViewModel.rollDaily(uiSettings.showNsfw) }
+    // 首次进入页面:各区块交错入场
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -98,17 +113,19 @@ fun HomeScreen(
             else -> {
                 if (homeViewModel.daily.isNotEmpty() || homeViewModel.dailyLoading) {
                     item {
-                        Row(
-                            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "今日推荐",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { homeViewModel.rerollDaily(uiSettings.showNsfw) }) {
-                                Text("换一批")
+                        staggeredIn(0, entered) {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "今日推荐",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = { homeViewModel.rerollDaily(uiSettings.showNsfw) }) {
+                                    Text("换一批")
+                                }
                             }
                         }
                     }
@@ -125,11 +142,49 @@ fun HomeScreen(
                         }
                     } else {
                         item {
+                            // 「换一批」:旧的一批向左滑出,新的一批从右弹入
+                            AnimatedContent(
+                                targetState = homeViewModel.daily,
+                                transitionSpec = {
+                                    (slideInHorizontally { it / 5 } + fadeIn()).togetherWith(
+                                        slideOutHorizontally { -it / 5 } + fadeOut()
+                                    )
+                                },
+                                label = "dailyRoll",
+                            ) { daily ->
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                ) {
+                                    items(daily, key = { it.gameId }) { game ->
+                                        CoverCard(
+                                            game,
+                                            onClick = { onOpenGame(game) },
+                                            modifier = Modifier.width(140.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (homeViewModel.forYou.isNotEmpty()) {
+                    item {
+                        staggeredIn(1, entered) {
+                            Text(
+                                "猜你喜欢",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                    item {
+                        staggeredIn(2, entered) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                             ) {
-                                items(homeViewModel.daily, key = { it.gameId }) { game ->
+                                items(homeViewModel.forYou, key = { it.gameId }) { game ->
                                     CoverCard(
                                         game,
                                         onClick = { onOpenGame(game) },
@@ -140,44 +195,25 @@ fun HomeScreen(
                         }
                     }
                 }
-                if (homeViewModel.forYou.isNotEmpty()) {
+                if (latest.isNotEmpty()) {
                     item {
-                        Text(
-                            "猜你喜欢",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
-                    }
-                    item {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                        ) {
-                            items(homeViewModel.forYou, key = { it.gameId }) { game ->
-                                CoverCard(
-                                    game,
-                                    onClick = { onOpenGame(game) },
-                                    modifier = Modifier.width(140.dp),
-                                )
-                            }
+                        staggeredIn(2, entered) {
+                            Text(
+                                "最新发行",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
                         }
                     }
                 }
-                if (latest.isNotEmpty()) {
-                    item {
-                        Text(
-                            "最新发行",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                itemsIndexed(latest, key = { _, it -> it.gameId }) { index, game ->
+                    staggeredIn(index, entered) {
+                        GameCard(
+                            game,
+                            onClick = { onOpenGame(game) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                         )
                     }
-                }
-                items(latest, key = { it.gameId }) { game ->
-                    GameCard(
-                        game,
-                        onClick = { onOpenGame(game) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
                 }
                 if (latest.isEmpty() && homeViewModel.daily.isEmpty() && homeViewModel.forYou.isEmpty()) {
                     item {
