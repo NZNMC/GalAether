@@ -393,19 +393,42 @@ private fun TypeChip(text: String) {
     )
 }
 
-/** 打开下载目录(文件管理器):选了自选目录就打开它,否则打开系统下载目录 */
+/**
+ * 打开下载目录(文件管理器),逐级兜底:
+ * 1. 选了自选目录 → 直接打开它
+ * 2. 否则打开系统下载目录(部分手机不支持,会抛异常)
+ * 3. 都不行 → 退回系统文件夹选择器,并定位到下载目录
+ */
 private fun openDownloadsFolder(context: Context) {
-    val intent = DownloadDir.treeUri?.let { uri ->
-        Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val treeUri = DownloadDir.treeUri
+    try {
+        val intent = treeUri?.let { uri ->
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        } ?: Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(MediaStore.Downloads.EXTERNAL_CONTENT_URI, "*/*")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-    } ?: Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(MediaStore.Downloads.EXTERNAL_CONTENT_URI, "*/*")
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        return
+    } catch (e: Exception) {
+        // 落到下面的文件夹选择器兜底
     }
     try {
-        context.startActivity(intent)
+        context.startActivity(
+            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(
+                    DocumentsContract.EXTRA_INITIAL_URI,
+                    DocumentsContract.buildDocumentUri(
+                        "com.android.externalstorage.documents",
+                        "primary:Download",
+                    ),
+                )
+            }
+        )
     } catch (e: Exception) {
         Toast.makeText(context, "无法打开下载目录,请用系统文件管理器查看", Toast.LENGTH_SHORT).show()
     }

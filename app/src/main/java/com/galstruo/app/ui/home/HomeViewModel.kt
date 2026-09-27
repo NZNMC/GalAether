@@ -70,14 +70,30 @@ class HomeViewModel : ViewModel() {
         dailyJob = viewModelScope.launch {
             dailyLoading = true
             try {
-                val picked = YmgalRepository.random(8)
-                daily = if (showNsfw) picked else filterSafe(picked)
+                daily = collectDaily(showNsfw)
             } catch (e: Exception) {
                 daily = emptyList()
             } finally {
                 dailyLoading = false
             }
         }
+    }
+
+    /**
+     * 今日推荐:目标凑满 8 部。
+     * 关闭 NSFW 时随机池里很多是限制级(还有查详情失败的),一批 8 部过滤完可能只剩 1-2 个,
+     * 所以不够就再随机一批补上,最多补 4 轮(避免接口请求过多);仍不够就展示现有的。
+     */
+    private suspend fun collectDaily(showNsfw: Boolean): List<GameItem> {
+        val picked = mutableListOf<GameItem>()
+        val seen = mutableSetOf<Long>()
+        var rounds = 0
+        while (picked.size < 8 && rounds < 4) {
+            rounds++
+            val batch = YmgalRepository.random(8).filter { seen.add(it.gameId) }
+            picked += if (showNsfw) batch else filterSafe(batch)
+        }
+        return picked.take(8)
     }
 
     /** 随机接口不返回限制级标记:关闭 NSFW 时逐个查详情,过滤限制级(查失败的一并排除,保证不越界) */

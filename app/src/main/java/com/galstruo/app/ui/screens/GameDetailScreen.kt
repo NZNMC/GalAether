@@ -77,7 +77,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -143,10 +142,11 @@ fun GameDetailScreen(
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                // 沉浸式封面:标题压在图下方,顶部栏不再重复显示(未加载时占位)
-                if (detail == null) {
-                    Text("游戏详情", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                Text(
+                    detail?.displayName ?: "游戏详情",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
@@ -327,66 +327,44 @@ private fun DetailContent(
     // 资源卡当前选中的来源:0=下载资源 1=网盘资源 2=更多资源站
     var resourceTab by remember { mutableStateOf(0) }
     LazyColumn(Modifier.fillMaxSize()) {
-        // 沉浸式封面:标题通过渐变遮罩压在封面底部
+        // 封面大图(标题由顶部栏显示,图上不再叠字,避免和封面自带文字糊在一起)
         item {
-            Box {
-                AsyncImage(
-                    model = detail.coverUrl,
-                    contentDescription = detail.displayName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1.6f),
-                )
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.45f to Color.Transparent,
-                                1f to Color.Black.copy(alpha = 0.78f),
-                            )
-                        ),
-                )
-                Column(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                ) {
-                    Text(
-                        detail.displayName,
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
-                        Text(
-                            detail.name.orEmpty(),
-                            color = Color.White.copy(alpha = 0.85f),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
-            }
-        }
-        // 信息 chips 行(封面下方,横向可滚动)
-        item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            AsyncImage(
+                model = detail.coverUrl,
+                contentDescription = detail.displayName,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .horizontalScroll(rememberScrollState()),
-            ) {
-                orgName?.let { InfoChip(it) }
-                detail.releaseDate?.let { InfoChip(it) }
-                // 平台信息在各发行版本(releases)里
-                detail.releases.orEmpty()
-                    .mapNotNull { it.platform }
-                    .distinct()
-                    .forEach { InfoChip(platformLabel(it)) }
-                if (detail.haveChinese) InfoChip("官方中文")
-                if (detail.restricted) InfoChip("限制级")
+                    .fillMaxWidth()
+                    .aspectRatio(1.6f),
+            )
+        }
+        // 信息 chips 行(封面下方,横向可滚动)+ 原名
+        item {
+            Column {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    orgName?.let { InfoChip(it) }
+                    detail.releaseDate?.let { InfoChip(it) }
+                    // 平台信息在各发行版本(releases)里
+                    detail.releases.orEmpty()
+                        .mapNotNull { it.platform }
+                        .distinct()
+                        .forEach { InfoChip(platformLabel(it)) }
+                    if (detail.haveChinese) InfoChip("官方中文")
+                    if (detail.restricted) InfoChip("限制级")
+                }
+                if (!detail.name.isNullOrBlank() && detail.name != detail.displayName) {
+                    Text(
+                        detail.name.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
         // 查找资源:三来源合成一张卡,顶部 pill 切换

@@ -7,7 +7,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,18 +25,18 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -41,6 +50,7 @@ import com.galstruo.app.data.UiSettings
 import com.galstruo.app.data.ymgal.GameItem
 import com.galstruo.app.ui.components.BounceIcon
 import com.galstruo.app.ui.components.DownloadIcon
+import com.galstruo.app.ui.components.pressScale
 import com.galstruo.app.ui.screens.CategoryScreen
 import com.galstruo.app.ui.screens.DownloadsScreen
 import com.galstruo.app.ui.screens.FavoritesScreen
@@ -76,38 +86,66 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
         bottomBar = {
             // 搜索页与详情页全屏展示,不显示底部导航
             if (currentRoute in bottomRoutes) {
-                NavigationBar(
-                    // 圆润悬浮式:与屏幕边缘留出间距,大圆角 + 阴影,像浮在内容上方
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp)
-                        .shadow(18.dp, RoundedCornerShape(28.dp))
-                        .clip(RoundedCornerShape(28.dp)),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 3.dp,
-                ) {
-                    bottomItems.forEach { item ->
-                        NavigationBarItem(
-                            selected = currentRoute == item.route,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+                // 悬浮胶囊底栏:整个一条胶囊(圆角=高度一半),内容全部收在胶囊内不会溢出
+                Box(Modifier.navigationBarsPadding()) {
+                    Surface(
+                        shape = RoundedCornerShape(percent = 50),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 10.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 12.dp),
+                    ) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            bottomItems.forEach { item ->
+                                val selected = currentRoute == item.route
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(
+                                            if (selected) MaterialTheme.colorScheme.primaryContainer
+                                            else Color.Transparent,
+                                            RoundedCornerShape(24.dp),
+                                        )
+                                        .pressScale()
+                                        .clickable {
+                                            navController.navigate(item.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                        .padding(vertical = 8.dp),
+                                ) {
+                                    BounceIcon(
+                                        selected = selected,
+                                        icon = item.icon,
+                                        contentDescription = item.label,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        item.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
-                            },
-                            icon = {
-                                BounceIcon(
-                                    selected = currentRoute == item.route,
-                                    icon = item.icon,
-                                    contentDescription = item.label,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            },
-                            label = { Text(item.label) },
-                        )
+                            }
+                        }
                     }
                 }
             }
