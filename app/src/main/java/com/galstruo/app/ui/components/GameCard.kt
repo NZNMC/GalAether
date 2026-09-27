@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,6 +92,31 @@ fun GameCard(item: GameItem, onClick: () -> Unit, modifier: Modifier = Modifier)
                                 )
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         )
+                    }
+                    item.score?.toFloatOrNull()?.takeIf { it > 0 }?.let { score ->
+                        Spacer(Modifier.width(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    RoundedCornerShape(50),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(10.dp),
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                if (score % 1f == 0f) score.toInt().toString() else score.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
                     }
                 }
             }

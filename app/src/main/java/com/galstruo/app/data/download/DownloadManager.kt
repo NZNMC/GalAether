@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.galstruo.app.GalAetherApp
 import com.galstruo.app.data.archive.SmartArchive
+import com.galstruo.app.data.network.NetConfig
 import com.galstruo.app.data.shinnku.ShinnkuFile
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -63,10 +64,22 @@ object DownloadManager {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val client = OkHttpClient.Builder()
+    private fun buildClient() = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .also { NetConfig.apply(it) }
         .build()
+
+    private var client = buildClient()
+    private var clientVersion = NetConfig.version
+
+    private fun currentClient(): OkHttpClient {
+        if (clientVersion != NetConfig.version) {
+            client = buildClient()
+            clientVersion = NetConfig.version
+        }
+        return client
+    }
 
     private val gson = Gson()
 
@@ -121,6 +134,13 @@ object DownloadManager {
         val rec = _records.value.find { it.url == url }
         rec?.let { recordFile(it).delete() }
         _records.value = _records.value.filterNot { it.url == url }
+        saveRecords()
+    }
+
+    /** 清空所有已完成记录(未归档的源文件一并删除,失败记录保留) */
+    fun clearDoneRecords() {
+        _records.value.filter { it.state == "DONE" }.forEach { recordFile(it).delete() }
+        _records.value = _records.value.filterNot { it.state == "DONE" }
         saveRecords()
     }
 
@@ -180,7 +200,7 @@ object DownloadManager {
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 13)")
                 .apply { if (existing > 0) header("Range", "bytes=$existing-") }
                 .build()
-            val call = client.newCall(request)
+            val call = currentClient().newCall(request)
             activeCalls[id] = call
             call.execute().use { resp ->
                 when {

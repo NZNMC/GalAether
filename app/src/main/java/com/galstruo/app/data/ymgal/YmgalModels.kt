@@ -13,6 +13,7 @@ data class GameItem(
     val haveChinese: Boolean = false,
     val state: String? = null,
     val restricted: Boolean = false,  // 限制级(发行区间接口返回,搜索/随机接口没有此字段)
+    val score: String? = null,        // 评分(接口返回字符串,如 "7.8" 或 "0" 表示无评分)
 ) {
     val gameId: Long get() = if (id != 0L) id else gid
     val displayName: String get() = mainName ?: chineseName ?: name ?: "未知游戏"

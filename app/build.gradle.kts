@@ -12,8 +12,8 @@ android {
         applicationId = "com.galstruo.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.5.0-M5"
+        versionCode = 10
+        versionName = "0.6.0"
     }
 
     buildTypes {
@@ -49,6 +49,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.compose.ui:ui")

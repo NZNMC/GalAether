@@ -13,3 +13,4 @@ token.json
 .claude/
 # 安装包太大,不进代码仓库
 releases/
+.ymgal_dev.html

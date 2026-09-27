@@ -1,5 +1,7 @@
 package com.galstruo.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.galstruo.app.BuildConfig
 import com.galstruo.app.ui.components.HistoryIcon
 
@@ -22,11 +25,12 @@ fun ProfileScreen(
     onOpenThemeSettings: () -> Unit,
     onOpenHistory: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("我的") })
         ListItem(
             headlineContent = { Text("设置") },
-            supportingContent = { Text("主题 · 深色模式 · 内容 · 数据与存储") },
+            supportingContent = { Text("主题 · 深色模式 · 内容 · 数据与存储 · 网络代理") },
             leadingContent = { Icon(Icons.Filled.Settings, contentDescription = null) },
             modifier = Modifier.clickable { onOpenThemeSettings() },
         )
@@ -38,8 +42,13 @@ fun ProfileScreen(
         )
         ListItem(
             headlineContent = { Text("关于") },
-            supportingContent = { Text("GalAether ${BuildConfig.VERSION_NAME}") },
+            supportingContent = { Text("GalAether ${BuildConfig.VERSION_NAME} · 点击查看项目主页") },
             leadingContent = { Icon(Icons.Filled.Info, contentDescription = null) },
+            modifier = Modifier.clickable {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NZNMC/GalAether"))
+                )
+            },
         )
     }
 }

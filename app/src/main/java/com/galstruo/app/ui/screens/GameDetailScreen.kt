@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -136,6 +137,23 @@ fun GameDetailScreen(
                 }
             },
             actions = {
+                // 分享游戏(系统分享面板)
+                IconButton(
+                    onClick = {
+                        detail?.let { d ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "${d.displayName} - 月幕Galgame: https://www.ymgal.games/GA${gid}",
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(intent, "分享游戏"))
+                        }
+                    },
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = "分享")
+                }
                 IconButton(
                     onClick = {
                         detail?.let { d ->

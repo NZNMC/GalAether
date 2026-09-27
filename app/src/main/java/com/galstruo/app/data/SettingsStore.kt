@@ -20,6 +20,10 @@ data class UiSettings(
     val dynamicColor: Boolean = true,   // 跟随壁纸动态取色
     val seedHue: Int = -1,              // 自定义主色色相 0~359,-1 = 未自定义
     val showNsfw: Boolean = false,      // 显示限制级(NSFW)内容,默认关闭
+    val proxyEnabled: Boolean = false,  // 网络代理开关
+    val proxyHost: String = "",         // 代理地址(不含端口)
+    val proxyPort: Int = 7890,          // 代理端口
+    val downloadUri: String = "",       // 自选下载目录(系统文件夹选择器返回的 uri 字符串)
 )
 
 class SettingsStore(private val context: Context) {
@@ -31,6 +35,10 @@ class SettingsStore(private val context: Context) {
             dynamicColor = p[KEY_DYNAMIC_COLOR] ?: true,
             seedHue = p[KEY_SEED_HUE] ?: -1,
             showNsfw = p[KEY_SHOW_NSFW] ?: false,
+            proxyEnabled = p[KEY_PROXY_ENABLED] ?: false,
+            proxyHost = p[KEY_PROXY_HOST] ?: "",
+            proxyPort = p[KEY_PROXY_PORT] ?: 7890,
+            downloadUri = p[KEY_DOWNLOAD_URI] ?: "",
         )
     }
 
@@ -57,10 +65,26 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_SHOW_NSFW] = on }
     }
 
+    suspend fun setProxy(enabled: Boolean, host: String, port: Int) {
+        context.dataStore.edit {
+            it[KEY_PROXY_ENABLED] = enabled
+            it[KEY_PROXY_HOST] = host
+            it[KEY_PROXY_PORT] = port
+        }
+    }
+
+    suspend fun setDownloadUri(uri: String) {
+        context.dataStore.edit { it[KEY_DOWNLOAD_URI] = uri }
+    }
+
     private companion object {
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val KEY_SEED_HUE = intPreferencesKey("seed_hue")
         val KEY_SHOW_NSFW = booleanPreferencesKey("show_nsfw")
+        val KEY_PROXY_ENABLED = booleanPreferencesKey("proxy_enabled")
+        val KEY_PROXY_HOST = stringPreferencesKey("proxy_host")
+        val KEY_PROXY_PORT = intPreferencesKey("proxy_port")
+        val KEY_DOWNLOAD_URI = stringPreferencesKey("download_uri")
     }
 }

@@ -2,6 +2,7 @@ package com.galstruo.app.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.galstruo.app.data.archive.SmartArchive
+import com.galstruo.app.data.download.DownloadDir
 import com.galstruo.app.data.download.DownloadManager
 import com.galstruo.app.data.download.DownloadRecord
 import com.galstruo.app.data.download.DownloadState
@@ -75,6 +77,8 @@ fun DownloadsScreen() {
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     val records by DownloadManager.records.collectAsStateWithLifecycle()
     var deleteTarget by remember { mutableStateOf<DownloadRecord?>(null) }
+    // 清空已完成记录确认框
+    var clearConfirm by remember { mutableStateOf(false) }
     // 已完成区的版本类型筛选
     var doneFilter by remember { mutableStateOf<String?>(null) }
 
@@ -129,7 +133,14 @@ fun DownloadsScreen() {
                     }
                 }
                 if (doneRecords.isNotEmpty()) {
-                    item { SectionTitle("已完成 · ${doneRecords.size}") }
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionTitle("已完成 · ${doneRecords.size}", Modifier.weight(1f))
+                            TextButton(onClick = { clearConfirm = true }) {
+                                Text("清空", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
                     item {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -178,14 +189,36 @@ fun DownloadsScreen() {
             },
         )
     }
+
+    if (clearConfirm) {
+        AlertDialog(
+            onDismissRequest = { clearConfirm = false },
+            title = { Text("清空所有已完成记录?") },
+            text = {
+                Text(
+                    "将删除 ${doneRecords.size} 条已完成记录,应用目录里未归档的下载文件也会一并删除。" +
+                        "已复制到下载目录 / 已解压到模拟器目录的文件不受影响。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    DownloadManager.clearDoneRecords()
+                    clearConfirm = false
+                }) { Text("清空", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { clearConfirm = false }) { Text("取消") }
+            },
+        )
+    }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = modifier.padding(top = 8.dp),
     )
 }
 
@@ -301,7 +334,7 @@ private fun DoneRow(
             Spacer(Modifier.height(8.dp))
             Text(
                 when {
-                    rec.archived -> "已归档:文件在系统下载目录或模拟器目录"
+                    rec.archived -> "已归档:文件在下载目录或模拟器目录"
                     fileExists -> "文件保存在应用下载目录"
                     else -> "源文件已删除"
                 },
@@ -357,9 +390,14 @@ private fun TypeChip(text: String) {
     )
 }
 
-/** 打开系统下载目录(文件管理器) */
+/** 打开下载目录(文件管理器):选了自选目录就打开它,否则打开系统下载目录 */
 private fun openDownloadsFolder(context: Context) {
-    val intent = Intent(Intent.ACTION_VIEW).apply {
+    val intent = DownloadDir.treeUri?.let { uri ->
+        Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    } ?: Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(MediaStore.Downloads.EXTERNAL_CONTENT_URI, "*/*")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

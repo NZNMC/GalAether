@@ -1,5 +1,6 @@
 package com.galstruo.app.data.ymgal
 
+import com.galstruo.app.data.network.NetConfig
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -17,10 +18,23 @@ import java.util.concurrent.TimeUnit
  */
 class YmgalApi {
 
-    private val client = OkHttpClient.Builder()
+    private fun buildClient() = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
+        .also { NetConfig.apply(it) }
         .build()
+
+    private var client = buildClient()
+    private var clientVersion = NetConfig.version
+
+    /** 代理配置变化时重建客户端 */
+    private fun currentClient(): OkHttpClient {
+        if (clientVersion != NetConfig.version) {
+            client = buildClient()
+            clientVersion = NetConfig.version
+        }
+        return client
+    }
 
     private val gson = Gson()
 
@@ -38,7 +52,7 @@ class YmgalApi {
             .url("$BASE_URL/oauth/token")
             .post(body)
             .build()
-        client.newCall(request).execute().use { resp ->
+        currentClient().newCall(request).execute().use { resp ->
             val json = resp.body?.string().orEmpty()
             val tokenResp = gson.fromJson(json, TokenResponse::class.java)
             token = tokenResp.access_token
@@ -59,7 +73,7 @@ class YmgalApi {
             .header("version", "1")
             .get()
             .build()
-        client.newCall(request).execute().use { resp ->
+        currentClient().newCall(request).execute().use { resp ->
             val json = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}: ${json.take(200)}")
             return json

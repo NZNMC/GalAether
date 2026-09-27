@@ -1,5 +1,6 @@
 package com.galstruo.app.data.kungal
 
+import com.galstruo.app.data.network.NetConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -26,17 +27,29 @@ object KungalApi {
     private const val BASE = "https://www.kungal.com"
     private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
 
-    private val client = OkHttpClient.Builder()
+    private fun buildClient() = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
+        .also { NetConfig.apply(it) }
         .build()
+
+    private var client = buildClient()
+    private var clientVersion = NetConfig.version
+
+    private fun currentClient(): OkHttpClient {
+        if (clientVersion != NetConfig.version) {
+            client = buildClient()
+            clientVersion = NetConfig.version
+        }
+        return client
+    }
 
     private suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", UA)
             .build()
-        client.newCall(request).execute().use { resp ->
+        currentClient().newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
             resp.body?.string().orEmpty()
         }

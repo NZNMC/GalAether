@@ -1,5 +1,6 @@
 package com.galstruo.app.data.shinnku
 
+import com.galstruo.app.data.network.NetConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -17,10 +18,22 @@ object ShinnkuApi {
     private const val UA =
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36"
 
-    private val client = OkHttpClient.Builder()
+    private fun buildClient() = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .also { NetConfig.apply(it) }
         .build()
+
+    private var client = buildClient()
+    private var clientVersion = NetConfig.version
+
+    private fun currentClient(): OkHttpClient {
+        if (clientVersion != NetConfig.version) {
+            client = buildClient()
+            clientVersion = NetConfig.version
+        }
+        return client
+    }
 
     /** 匹配内嵌的转义 JSON 结果:{\"id\":\"...\",\"info\":{\"file_path\":\"...\",...}} */
     private val itemRegex = Regex(
@@ -34,7 +47,7 @@ object ShinnkuApi {
             .url("https://www.shinnku.com/search?q=$query")
             .header("User-Agent", UA)
             .build()
-        client.newCall(request).execute().use { resp ->
+        currentClient().newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("真红小站访问失败: HTTP ${resp.code}")
             val body = resp.body?.string().orEmpty()
             itemRegex.findAll(body).map { m ->

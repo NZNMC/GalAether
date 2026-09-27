@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,6 +84,14 @@ fun SearchScreen(
                 }
             },
         )
+        if (searchViewModel.allResults.isNotEmpty()) {
+            FilterSortRow(
+                onlyChinese = searchViewModel.onlyChinese,
+                sort = searchViewModel.sort,
+                onToggleChinese = searchViewModel::toggleOnlyChinese,
+                onSortChange = searchViewModel::selectSort,
+            )
+        }
         when {
             searchViewModel.loading -> LoadingState()
 
@@ -91,7 +101,14 @@ fun SearchScreen(
             )
 
             searchViewModel.results.isEmpty() -> {
-                if (history.isEmpty()) {
+                if (searchViewModel.allResults.isNotEmpty()) {
+                    // 有原始结果但被筛选条件过滤掉了
+                    EmptyState(
+                        icon = Icons.Filled.Search,
+                        title = "筛选条件下没有结果",
+                        subtitle = "试试放宽筛选条件",
+                    )
+                } else if (history.isEmpty()) {
                     EmptyState(
                         icon = Icons.Filled.Search,
                         title = "输入关键词开始搜索",
@@ -163,6 +180,67 @@ fun SearchScreen(
                         searchViewModel.hasNext -> LaunchedEffect(Unit) { searchViewModel.loadMore() }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** 筛选(官方中文)+ 排序 chips,只在本页使用(月幕接口不支持服务端筛选) */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterSortRow(
+    onlyChinese: Boolean,
+    sort: SearchViewModel.SortOption,
+    onToggleChinese: () -> Unit,
+    onSortChange: (SearchViewModel.SortOption) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "筛选",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            FilterChip(
+                selected = !onlyChinese,
+                onClick = { if (onlyChinese) onToggleChinese() },
+                label = { Text("全部") },
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            FilterChip(
+                selected = onlyChinese,
+                onClick = { if (!onlyChinese) onToggleChinese() },
+                label = { Text("官方中文") },
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            Text(
+                "排序",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            val options = listOf(
+                SearchViewModel.SortOption.DEFAULT to "相关度",
+                SearchViewModel.SortOption.NEWEST to "最新发行",
+                SearchViewModel.SortOption.OLDEST to "最早发行",
+                SearchViewModel.SortOption.TOP_RATED to "评分最高",
+            )
+            options.forEach { (option, label) ->
+                FilterChip(
+                    selected = sort == option,
+                    onClick = { onSortChange(option) },
+                    label = { Text(label) },
+                    modifier = Modifier.padding(end = 8.dp),
+                )
             }
         }
     }

@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.galstruo.app.GalAetherApp
+import com.galstruo.app.data.download.DownloadDir
 import com.galstruo.app.data.download.DownloadManager
 import com.galstruo.app.data.download.DownloadService
 import com.galstruo.app.data.download.DownloadTask
@@ -84,6 +85,13 @@ object SmartArchive {
 
     /** 复制到系统下载目录。成功返回提示文字,失败抛异常。 */
     private fun handleCopy(context: Context, task: DownloadTask, src: File) {
+        // 用户选了自选下载目录时优先复制进去;文件夹不可用则回退到系统下载目录
+        if (DownloadDir.isSet() && DownloadDir.copyInto(context, src) != null) {
+            DownloadManager.markArchived(task.url)
+            src.delete()  // 已复制到自选目录,应用目录里的原件不再需要
+            notify(context, task, "已保存到「${DownloadDir.label}」文件夹")
+            return
+        }
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, src.name)
