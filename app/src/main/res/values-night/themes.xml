@@ -6,7 +6,7 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <!-- 启动画面(夜间):深色背景 -->
+    <!-- 启动画面(夜间):默认样式(深色背景 + 应用图标) -->
     <style name="Theme.GalStore.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1C1B1F</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>

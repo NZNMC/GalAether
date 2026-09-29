@@ -25,7 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -244,7 +244,7 @@ private fun ActiveRow(task: DownloadTask, modifier: Modifier = Modifier) {
                     )
                 }
                 IconButton(onClick = { DownloadManager.cancel(task.id) }) {
-                    Icon(Icons.Filled.Close, contentDescription = "取消下载")
+                    Icon(Icons.Rounded.Close, contentDescription = "取消下载")
                 }
             }
             Spacer(Modifier.height(8.dp))

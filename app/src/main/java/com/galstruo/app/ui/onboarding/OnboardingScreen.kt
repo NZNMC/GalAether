@@ -19,9 +19,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,12 +48,12 @@ private data class OnboardPage(
 
 private val pages = listOf(
     OnboardPage(
-        icon = Icons.Filled.Favorite,
+        icon = Icons.Rounded.Favorite,
         title = "欢迎使用 GalAether",
         body = "你的个人 Galgame 商店:在这里发现作品、查找下载资源,再配合模拟器游玩。游戏资料来自月幕 Galgame 社区。",
     ),
     OnboardPage(
-        icon = Icons.Filled.Search,
+        icon = Icons.Rounded.Search,
         title = "首页与搜索",
         body = "首页有「今日推荐」「热门经典」「最新发行」三个区块,右上角可以搜索你想玩的任何作品,点进详情页就能看到它的下载资源。",
     ),
@@ -63,7 +63,7 @@ private val pages = listOf(
         body = "游戏下载后,KRKR 压缩包会自动解压到吉里吉里2 文件夹。还没有模拟器?去「我的 → 设置」,KRKR2、ONS、Tyranor 都能在线下载安装。",
     ),
     OnboardPage(
-        icon = Icons.Filled.Lock,
+        icon = Icons.Rounded.Lock,
         title = "设置与隐私",
         body = "本应用不注册账号、不收集任何个人信息、没有广告,所有数据只保存在你的手机里。应用不存储任何游戏资源,链接来自第三方公开站点,版权归原作者所有,请支持正版。更多说明见设置里的隐私政策与免责声明。",
     ),

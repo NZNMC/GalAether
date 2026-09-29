@@ -6,7 +6,7 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
-    <!-- 启动画面:打开 App 的瞬间显示图标 -->
+    <!-- 启动画面:默认样式(浅色背景 + 应用图标) -->
     <style name="Theme.GalStore.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#FFFBFE</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>

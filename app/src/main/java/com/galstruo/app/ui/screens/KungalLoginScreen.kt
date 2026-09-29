@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,9 +75,18 @@ private const val EXTRACT_USER_JS = """
       function deref(v) {
         var g = 0;
         while (g++ < 12) {
-          if (typeof v === 'number' && v >= 0 && v < arr.length) { v = arr[v]; continue; }
+          if (typeof v === 'number' && v >= 0 && v < arr.length) {
+            v = arr[v];
+            // 落到数字就是叶子值(如萌汁点数),不能再当指针继续追
+            if (typeof v === 'number') break;
+            continue;
+          }
           if (Array.isArray(v) && v.length >= 2 && (v[0] === 'Ref' || v[0] === 'EmptyRef') &&
-              typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) { v = arr[v[1]]; continue; }
+              typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) {
+            v = arr[v[1]];
+            if (typeof v === 'number') break;
+            continue;
+          }
           break;
         }
         return v;
@@ -103,10 +112,15 @@ private const val EXTRACT_USER_JS = """
         if (el.moemoepoint === undefined) continue;
         if (el.isCheckIn === undefined && el.dailyCheckIn === undefined && el.dailyToolsetUploadBytes === undefined) continue;
         var name = str(el.name);
-        if (!name) continue;
+        // 官网把未登录的匿名昵称存成字面量 '""'(两个引号字符),要当空值过滤
+        if (!name || name === '""') continue;
         var avatar = avatarOf(el.avatar) || avatarOf(el.avatarMin);
         if (avatar && avatar.indexOf('/') === 0) avatar = 'https://www.kungal.com' + avatar;
-        return { name: name, avatar: avatar, uid: str(el.sub) };
+        var mp = deref(el.moemoepoint);
+        mp = typeof mp === 'number' ? mp : 0;
+        var ck = deref(el.isCheckIn);
+        ck = (typeof ck === 'boolean') ? ck : false;
+        return { name: name, avatar: avatar, uid: str(el.sub), moemoepoint: mp, isCheckIn: ck };
       }
       return null;
     }
@@ -131,9 +145,22 @@ private const val EXTRACT_USER_JS = """
       var u = st && st.KUNGalgameUser;
       if (u && typeof u === 'object') {
         var n2 = typeof u.name === 'string' ? u.name : '';
-        if (n2) {
-          var a2 = (typeof u.avatar === 'string' && u.avatar) || (typeof u.avatarMin === 'string' && u.avatarMin) || '';
+        if (n2 && n2 !== '""') {
+          // 头像兼容三种形态:字符串 / {url,hash} 对象 / hash 裸字符串
+          // (登录态 pinia 里头像常是 {url,hash,…} 对象,只认字符串会丢头像)
+          var a2 = '';
+          var av = u.avatar || u.avatarMin;
+          if (typeof av === 'string' && av) a2 = av;
+          else if (av && typeof av === 'object') {
+            var uu = av.url;
+            if (typeof uu !== 'string' || !uu) uu = av.hash;
+            if (typeof uu === 'string' && uu) a2 = uu;
+          }
+          // hash → 完整 CDN 地址:https://image.kungal.iloveren.link/前2位/第3-4位/完整hash.webp
           if (a2 && a2.indexOf('/') === 0) a2 = 'https://www.kungal.com' + a2;
+          else if (a2 && a2.indexOf('http') !== 0 && a2.indexOf('.webp') === -1) {
+            a2 = 'https://image.kungal.iloveren.link/' + a2.substring(0, 2) + '/' + a2.substring(2, 4) + '/' + a2 + '.webp';
+          }
           return { name: n2, avatar: a2, uid: typeof u.sub === 'string' ? u.sub : '' };
         }
       }
@@ -165,9 +192,18 @@ private const val EXTRACT_ASYNC_JS = """
       function deref(v) {
         var g = 0;
         while (g++ < 12) {
-          if (typeof v === 'number' && v >= 0 && v < arr.length) { v = arr[v]; continue; }
+          if (typeof v === 'number' && v >= 0 && v < arr.length) {
+            v = arr[v];
+            // 落到数字就是叶子值(如萌汁点数),不能再当指针继续追
+            if (typeof v === 'number') break;
+            continue;
+          }
           if (Array.isArray(v) && v.length >= 2 && (v[0] === 'Ref' || v[0] === 'EmptyRef') &&
-              typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) { v = arr[v[1]]; continue; }
+              typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) {
+            v = arr[v[1]];
+            if (typeof v === 'number') break;
+            continue;
+          }
           break;
         }
         return v;
@@ -193,10 +229,15 @@ private const val EXTRACT_ASYNC_JS = """
         if (el.moemoepoint === undefined) continue;
         if (el.isCheckIn === undefined && el.dailyCheckIn === undefined && el.dailyToolsetUploadBytes === undefined) continue;
         var name = str(el.name);
-        if (!name) continue;
+        // 官网把未登录的匿名昵称存成字面量 '""'(两个引号字符),要当空值过滤
+        if (!name || name === '""') continue;
         var avatar = avatarOf(el.avatar) || avatarOf(el.avatarMin);
         if (avatar && avatar.indexOf('/') === 0) avatar = 'https://www.kungal.com' + avatar;
-        return { name: name, avatar: avatar, uid: str(el.sub) };
+        var mp = deref(el.moemoepoint);
+        mp = typeof mp === 'number' ? mp : 0;
+        var ck = deref(el.isCheckIn);
+        ck = (typeof ck === 'boolean') ? ck : false;
+        return { name: name, avatar: avatar, uid: str(el.sub), moemoepoint: mp, isCheckIn: ck };
       }
       return null;
     }
@@ -247,9 +288,17 @@ private const val DIAG_JS = """
     function derefIn(arr, v) {
       var g = 0;
       while (g++ < 12) {
-        if (typeof v === 'number' && v >= 0 && v < arr.length) { v = arr[v]; continue; }
+        if (typeof v === 'number' && v >= 0 && v < arr.length) {
+          v = arr[v];
+          if (typeof v === 'number') break;
+          continue;
+        }
         if (Array.isArray(v) && v.length >= 2 && (v[0] === 'Ref' || v[0] === 'EmptyRef') &&
-            typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) { v = arr[v[1]]; continue; }
+            typeof v[1] === 'number' && v[1] >= 0 && v[1] < arr.length) {
+          v = arr[v[1]];
+          if (typeof v === 'number') break;
+          continue;
+        }
         break;
       }
       return v;
@@ -346,6 +395,10 @@ private fun parseUserJson(raw: String?): KungalUser? {
         id = obj.get("uid")?.asString?.toLongOrNull() ?: 0L,
         name = name,
         avatar = obj.get("avatar")?.asString.orEmpty(),
+        moemoepoint = obj.get("moemoepoint")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+            ?.asInt ?: 0,
+        isCheckIn = obj.get("isCheckIn")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }
+            ?.asBoolean ?: false,
     )
 }
 
@@ -484,7 +537,7 @@ fun KungalLoginScreen(onBack: () -> Unit) {
             title = { Text(if (success) "登录成功" else "登录鲲galgame") },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
                 }
             },
         )
@@ -558,7 +611,7 @@ fun KungalLoginScreen(onBack: () -> Unit) {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            Icons.Filled.CheckCircle,
+                            Icons.Rounded.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(56.dp),

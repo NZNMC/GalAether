@@ -21,8 +21,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -74,7 +74,7 @@ fun SearchScreen(
                     shape = RoundedCornerShape(32.dp),
                     trailingIcon = {
                         IconButton(onClick = searchViewModel::search) {
-                            Icon(Icons.Filled.Search, contentDescription = "搜索")
+                            Icon(Icons.Rounded.Search, contentDescription = "搜索")
                         }
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -84,7 +84,7 @@ fun SearchScreen(
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
                 }
             },
         )
@@ -108,13 +108,13 @@ fun SearchScreen(
                 if (searchViewModel.allResults.isNotEmpty()) {
                     // 有原始结果但被筛选条件过滤掉了
                     EmptyState(
-                        icon = Icons.Filled.Search,
+                        icon = Icons.Rounded.Search,
                         title = "筛选条件下没有结果",
                         subtitle = "试试放宽筛选条件",
                     )
                 } else if (history.isEmpty()) {
                     EmptyState(
-                        icon = Icons.Filled.Search,
+                        icon = Icons.Rounded.Search,
                         title = "输入关键词开始搜索",
                         subtitle = "支持中文/日文游戏名",
                     )

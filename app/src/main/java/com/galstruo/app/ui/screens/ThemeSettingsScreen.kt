@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,6 +82,7 @@ import com.galstruo.app.data.sync.SyncManager
 import com.galstruo.app.data.sync.WebDavSync
 import com.galstruo.app.data.update.UpdateChecker
 import com.galstruo.app.ui.components.ColorWheel
+import com.galstruo.app.ui.theme.m3RoleColor
 import com.galstruo.app.ui.components.pressScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -258,7 +260,7 @@ fun ThemeSettingsScreen(
             title = { Text("设置") },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
                 }
             },
         )
@@ -296,15 +298,24 @@ fun ThemeSettingsScreen(
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
             ) {
+                // 预设色相改为 HCT 色相(配色表按 HCT 生成),数值由官方库换算而来,
+                // 保证点"谷歌蓝"得到的确实是蓝,而不是偏青
                 listOf(
-                    "谷歌蓝" to 212,
-                    "樱粉" to 340,
-                    "薄荷绿" to 160,
-                    "青紫" to 270,
-                    "珊瑚橙" to 20,
-                    "柠檬黄" to 55,
+                    "谷歌蓝" to 258,
+                    "樱粉" to 5,
+                    "薄荷绿" to 168,
+                    "青紫" to 310,
+                    "珊瑚橙" to 43,
+                    "柠檬黄" to 105,
                 ).forEach { (name, presetHue) ->
                     val selected = !uiSettings.dynamicColor && uiSettings.seedHue == presetHue
+                    // 预设圆点颜色直接从调色板取(与点下去后应用的实际配色一致),
+                    // 而不是用 HSV 公式画,避免圆点和实际效果有色差
+                    val presetColor = m3RoleColor(
+                        presetHue.toFloat(),
+                        "primary",
+                        isSystemInDarkTheme(),
+                    )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -317,7 +328,7 @@ fun ThemeSettingsScreen(
                         Box(
                             Modifier
                                 .size(34.dp)
-                                .background(Color.hsv(presetHue.toFloat(), 0.7f, 0.9f), CircleShape)
+                                .background(presetColor, CircleShape)
                                 .border(
                                     width = if (selected) 3.dp else 0.dp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

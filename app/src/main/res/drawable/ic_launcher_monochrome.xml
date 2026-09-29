@@ -1,26 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 方案三:字母 G + 流星。图形居中,关键元素都在自适应图标安全区内 -->
+<!-- 单色版图标:安卓 13+ 主题图标(系统按壁纸色调着色,只取透明度轮廓) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 流星轨迹(琥珀色,从左下划向右上) -->
-    <path
-        android:pathData="M26,82 L72,32"
-        android:strokeColor="#FFD54F"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
-    <!-- 字母 G:右侧开口的大圆弧 + 一横收进开口 -->
     <path
         android:pathData="M76.6,45.8 A24,24 0 1 0 76.6,62.2 L76.6,54 L58,54"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="8.5"
         android:strokeLineCap="round"
         android:fillColor="#00000000" />
-    <!-- 流星头部四角星芒 -->
+    <path
+        android:pathData="M26,82 L72,32"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
     <path
         android:pathData="M72,28.6 L73.6,32.5 L77.5,34.1 L73.6,35.7 L72,39.6 L70.4,35.7 L66.5,34.1 L70.4,32.5 Z"
-        android:fillColor="#FFD54F" />
+        android:fillColor="#FFFFFF" />
 </vector>

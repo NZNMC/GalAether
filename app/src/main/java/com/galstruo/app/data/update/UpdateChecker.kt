@@ -24,8 +24,8 @@ object UpdateChecker {
 
     /** 查询接口的加速镜像前缀(依次回退) */
     private val apiMirrors = listOf(
+        "https://gh-proxy.com/",
         "https://ghfast.top/",
-        "https://ghproxy.net/",
     )
 
     /** 最新版本信息 */

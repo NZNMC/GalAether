@@ -13,6 +13,10 @@ data class KungalUser(
     val id: Long,
     val name: String,
     val avatar: String = "",
+    /** 萌汁点数(官网积分,下载资源用) */
+    val moemoepoint: Int = 0,
+    /** 今日是否已签到 */
+    val isCheckIn: Boolean = false,
 )
 
 /**

@@ -24,10 +24,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -75,14 +76,20 @@ import com.galstruo.app.ui.screens.SearchScreen
 import com.galstruo.app.ui.screens.ThemeSettingsScreen
 import kotlinx.coroutines.launch
 
-private data class BottomItem(val route: String, val label: String, val icon: ImageVector)
+private data class BottomItem(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+    /** 选中态图标(M3 标准:未选中描边、选中实心) */
+    val selectedIcon: ImageVector? = null,
+)
 
 private val bottomItems = listOf(
-    BottomItem("home", "首页", Icons.Filled.Home),
-    BottomItem("category", "分类", Icons.AutoMirrored.Filled.List),
+    BottomItem("home", "首页", Icons.Rounded.Home),
+    BottomItem("category", "分类", Icons.AutoMirrored.Rounded.List),
     BottomItem("downloads", "下载", DownloadIcon),
-    BottomItem("favorites", "收藏", Icons.Filled.Favorite),
-    BottomItem("profile", "我的", Icons.Filled.Person),
+    BottomItem("favorites", "收藏", Icons.Rounded.Favorite, Icons.Filled.Favorite),
+    BottomItem("profile", "我的", Icons.Rounded.Person),
 )
 
 private val bottomRoutes = bottomItems.map { it.route }.toSet()
@@ -170,6 +177,9 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
                                         icon = item.icon,
                                         contentDescription = item.label,
                                         modifier = Modifier.size(24.dp),
+                                        selectedIcon = item.selectedIcon,
+                                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                     Spacer(Modifier.height(2.dp))
                                     Text(
@@ -211,6 +221,7 @@ fun GalStoreApp(settings: SettingsStore, uiSettings: UiSettings) {
                 HomeScreen(
                     onOpenSearch = { navController.navigate("search") },
                     onOpenGame = { navController.navigate(openGameRoute(it)) },
+                    onOpenKungalLogin = { navController.navigate("kungalLogin") },
                     uiSettings = uiSettings,
                 )
             }

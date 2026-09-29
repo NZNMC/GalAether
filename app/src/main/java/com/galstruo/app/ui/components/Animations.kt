@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -92,10 +93,14 @@ fun BounceIcon(
     icon: ImageVector,
     contentDescription: String?,
     modifier: Modifier = Modifier,
+    /** 选中态图标(M3 标准:未选中描边、选中实心);不传则选中与未选中同款 */
+    selectedIcon: ImageVector? = null,
+    tint: Color = Color.Unspecified,
 ) {
+    val draw = if (selected && selectedIcon != null) selectedIcon!! else icon
     // 动画总开关关闭时直接显示静态图标
     if (!LocalMotionEnabled.current) {
-        Icon(icon, contentDescription, modifier)
+        Icon(draw, contentDescription, modifier, tint = tint)
         return
     }
     val scale = remember { Animatable(1f) }
@@ -112,11 +117,12 @@ fun BounceIcon(
         }
     }
     Icon(
-        icon,
+        draw,
         contentDescription,
         modifier.graphicsLayer {
             scaleX = scale.value
             scaleY = scale.value
         },
+        tint = tint,
     )
 }

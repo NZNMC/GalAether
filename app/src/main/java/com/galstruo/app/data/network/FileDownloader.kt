@@ -35,8 +35,8 @@ object FileDownloader {
 
     /** GitHub 国内加速镜像前缀(依次回退;镜像地址偶尔失效,失效时自动跳到下一个) */
     private val mirrors = listOf(
+        "https://gh-proxy.com/",
         "https://ghfast.top/",
-        "https://ghproxy.net/",
         "https://gh-proxy.com/",
     )
 

@@ -39,8 +39,8 @@ class MainActivity : ComponentActivity() {
             }
             val s = uiSettings
             if (s == null) {
-                // 与启动画面同色系的空白页,避免黑屏/闪白
-                val blank = if (isSystemInDarkTheme()) Color(0xFF1C1B1F) else Color(0xFFFFFBFE)
+                // 与启动画面同色(用 M3 background 角色的近似值,避免闪白/黑屏)
+                val blank = if (isSystemInDarkTheme()) Color(0xFF131318) else Color(0xFFFDFBFF)
                 Box(Modifier.fillMaxSize().background(blank))
                 return@setContent
             }

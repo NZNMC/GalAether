@@ -19,8 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,7 +65,7 @@ fun FavoritesScreen(onOpenGame: (Long) -> Unit) {
         TopAppBar(title = { Text("收藏") })
         if (favorites.isEmpty()) {
             EmptyState(
-                icon = Icons.Filled.Favorite,
+                icon = Icons.Rounded.Favorite,
                 title = "还没有收藏",
                 subtitle = "在游戏详情页点右上角的❤,收藏的游戏就会出现在这里",
             )
@@ -178,7 +178,7 @@ private fun FavoriteRow(
             }
             IconButton(onClick = { showEdit = true }) {
                 Icon(
-                    Icons.Filled.Edit,
+                    Icons.Rounded.Edit,
                     contentDescription = "编辑状态与备注",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -186,7 +186,7 @@ private fun FavoriteRow(
             }
             IconButton(onClick = onRemove) {
                 Icon(
-                    Icons.Filled.Favorite,
+                    Icons.Rounded.Favorite,
                     contentDescription = "取消收藏",
                     tint = MaterialTheme.colorScheme.primary,
                 )

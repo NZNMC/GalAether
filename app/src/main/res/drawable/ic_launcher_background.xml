@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pixel / Material You 风格图标背景:蓝紫柔和渐变 -->
+<!-- 方案三:字母 G + 流星。背景为紫罗兰渐变(左上深紫 → 右下亮紫) -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <gradient
         android:type="linear"
         android:angle="315"
-        android:startColor="#4E7DFF"
-        android:endColor="#8A5CFF" />
+        android:startColor="#4527A0"
+        android:endColor="#6A3DE8" />
 </shape>

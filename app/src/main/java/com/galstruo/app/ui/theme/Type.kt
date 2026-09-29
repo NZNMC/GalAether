@@ -9,12 +9,12 @@ import com.galstruo.app.R
 /**
  * 全局字体:HarmonyOS Sans SC(华为开源字体,允许随应用分发,
  * 许可证见 docs/HarmonyOS_Sans_LICENSE.txt)。
- * 三档字重:常规 / 中等 / 粗体,覆盖 Material 3 默认排版的所有字重需求。
+ * 为控制包体积只带 Regular / Medium 两档(各 8MB),粗体回退到 Medium——两档视觉差异很小。
  */
 private val AppFontFamily = FontFamily(
     Font(R.font.harmonyos_sans_sc_regular, FontWeight.Normal),
     Font(R.font.harmonyos_sans_sc_medium, FontWeight.Medium),
-    Font(R.font.harmonyos_sans_sc_bold, FontWeight.Bold),
+    Font(R.font.harmonyos_sans_sc_medium, FontWeight.Bold),
 )
 
 /** Material 3 默认排版,全局使用 HarmonyOS Sans SC(样式逐项换成该字体) */

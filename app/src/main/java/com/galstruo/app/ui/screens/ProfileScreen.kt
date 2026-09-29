@@ -2,26 +2,30 @@ package com.galstruo.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -87,7 +91,7 @@ fun ProfileScreen(
             ListItem(
                 headlineContent = { Text("鲲galgame 账号") },
                 supportingContent = { Text("登录后网盘资源更全,含提取码/解压密码") },
-                leadingContent = { Icon(Icons.Filled.AccountCircle, contentDescription = null) },
+                leadingContent = { Icon(Icons.Rounded.AccountCircle, contentDescription = null) },
                 modifier = Modifier
                     .pressScale()
                     .clickable { onOpenKungalLogin() },
@@ -95,7 +99,13 @@ fun ProfileScreen(
         } else {
             ListItem(
                 headlineContent = { Text(user?.name.orEmpty()) },
-                supportingContent = { Text("已登录鲲galgame") },
+                supportingContent = {
+                    Text(
+                        "萌汁 ${user?.moemoepoint ?: 0} · ${
+                            if (user?.isCheckIn == true) "今日已签到" else "今日未签到"
+                        }",
+                    )
+                },
                 leadingContent = {
                     if (user?.avatar?.isNotBlank() == true) {
                         AsyncImage(
@@ -108,7 +118,7 @@ fun ProfileScreen(
                         )
                     } else {
                         Icon(
-                            Icons.Filled.AccountCircle,
+                            Icons.Rounded.AccountCircle,
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
                         )
@@ -137,7 +147,7 @@ fun ProfileScreen(
                             )
                         } else {
                             Icon(
-                                Icons.Filled.AccountCircle,
+                                Icons.Rounded.AccountCircle,
                                 contentDescription = null,
                                 modifier = Modifier.size(40.dp),
                             )
@@ -171,7 +181,7 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("设置") },
             supportingContent = { Text("主题 · 深色模式 · 内容 · 数据与存储 · 网络代理") },
-            leadingContent = { Icon(Icons.Filled.Settings, contentDescription = null) },
+            leadingContent = { Icon(Icons.Rounded.Settings, contentDescription = null) },
             modifier = Modifier
                 .pressScale()
                 .clickable { onOpenThemeSettings() },
@@ -187,7 +197,7 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("数据备份") },
             supportingContent = { Text("导出备份到下载目录 / 从备份文件恢复收藏与记录") },
-            leadingContent = { Icon(Icons.Filled.Share, contentDescription = null) },
+            leadingContent = { Icon(Icons.Rounded.Share, contentDescription = null) },
             modifier = Modifier
                 .pressScale()
                 .clickable {
@@ -209,7 +219,7 @@ fun ProfileScreen(
             supportingContent = {
                 Text("GalAether ${BuildConfig.VERSION_NAME} · 包名 ${BuildConfig.APPLICATION_ID} · 点击查看项目主页")
             },
-            leadingContent = { Icon(Icons.Filled.Info, contentDescription = null) },
+            leadingContent = { Icon(Icons.Rounded.Info, contentDescription = null) },
             modifier = Modifier
                 .pressScale()
                 .clickable {

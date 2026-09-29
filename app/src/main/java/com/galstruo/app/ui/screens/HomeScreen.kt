@@ -23,8 +23,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -34,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.galstruo.app.data.ListStyle
@@ -55,11 +59,37 @@ import com.galstruo.app.ui.components.GameCard
 import com.galstruo.app.ui.components.GameRow
 import com.galstruo.app.ui.components.staggeredIn
 import com.galstruo.app.ui.home.HomeViewModel
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import coil.compose.AsyncImage
+import com.galstruo.app.data.kungal.KungalAuth
+import java.util.Calendar
 
 @Composable
 fun HomeScreen(
     onOpenSearch: () -> Unit,
     onOpenGame: (GameItem) -> Unit,
+    onOpenKungalLogin: () -> Unit,
     uiSettings: UiSettings,
     homeViewModel: HomeViewModel = viewModel(),
 ) {
@@ -77,37 +107,147 @@ fun HomeScreen(
     LaunchedEffect(Unit) { entered = true }
     // 最近浏览:接着上次看(浏览历史实时刷新)
     val recent by HistoryStore.history.collectAsStateWithLifecycle()
+    // 鲲账号状态(顶部头像圆钮用);进入首页时刷新一次,头像保持新鲜
+    val kungalUser by KungalAuth.user.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { KungalAuth.refresh() }
 
-    LazyColumn(Modifier.fillMaxSize()) {
-        // 紧凑头部:标题贴着状态栏,下方内容整体上移补位(不再用大标题顶栏留白)
+    // Play 商店式滚动动画:向下滚动时大标题逐渐收缩、顶栏收紧
+    val listState = rememberLazyListState()
+    val collapse by remember {
+        derivedStateOf {
+            (listState.firstVisibleItemScrollOffset / 120f).coerceIn(0f, 1f)
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        // 顶部第一行(Play 风格):大标题 + 搜索圆钮 + 头像圆钮(点头像进鲲,未登录进登录页)
+        // 向下滚动时标题从 28sp 缩到 20sp,顶栏间距同步收紧
         item {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = lerp(6.dp, 1.dp, collapse),
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "GalAether",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = lerp(28.sp, 20.sp, collapse),
+                    ),
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = onOpenSearch) {
-                    Icon(Icons.Filled.Search, contentDescription = "搜索")
+                // 搜索圆钮
+                Surface(
+                    onClick = onOpenSearch,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.size(lerp(40.dp, 36.dp, collapse)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = "搜索",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                // 头像圆钮:已登录显示鲲头像,未登录显示默认人像
+                Surface(
+                    onClick = onOpenKungalLogin,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.size(lerp(40.dp, 36.dp, collapse)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (kungalUser?.avatar?.isNotBlank() == true) {
+                            AsyncImage(
+                                model = kungalUser?.avatar,
+                                contentDescription = "鲲galgame 账号",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Person,
+                                contentDescription = "鲲galgame 账号",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // 第二行:搜索条(点击进搜索页)
+        item {
+            Surface(
+                onClick = onOpenSearch,
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .height(40.dp),
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "搜索游戏、会社…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
         when {
-            homeViewModel.loading -> item {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(48.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
+            homeViewModel.loading -> {
+                // 顶部细加载条 + 骨架占位(Pixel 风格,替代转圈)
+                item {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.5.dp),
+                    )
+                }
+                item {
+                    val skelAlpha by rememberInfiniteTransition(label = "skel").animateFloat(
+                        initialValue = 0.45f,
+                        targetValue = 0.85f,
+                        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                        label = "skelAlpha",
+                    )
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Spacer(Modifier.height(12.dp))
+                        SkelBox(Modifier.width(110.dp).height(22.dp), skelAlpha)
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            repeat(3) {
+                                SkelBox(Modifier.width(104.dp).height(138.dp), skelAlpha)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -153,13 +293,21 @@ fun HomeScreen(
                     if (homeViewModel.daily.isEmpty()) {
                         item {
                             if (homeViewModel.dailyLoading) {
-                                Row(
-                                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Spacer(Modifier.width(12.dp))
-                                    Text("正在为你挑选…", style = MaterialTheme.typography.bodyMedium)
+                                Column {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp)
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "正在为你挑选…",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                    )
                                 }
                             } else {
                                 Text(
@@ -339,4 +487,14 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/** 骨架屏占位块:扁平淡色,透明度呼吸 */
+@Composable
+private fun SkelBox(modifier: Modifier = Modifier, alpha: Float) {
+    Box(
+        modifier.background(
+            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = alpha)
+        ),
+    )
 }

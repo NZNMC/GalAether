@@ -48,11 +48,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -97,6 +97,7 @@ import com.galstruo.app.data.archive.SmartArchive
 import com.galstruo.app.data.kungal.KungalApi
 import com.galstruo.app.data.kungal.KungalAuth
 import com.galstruo.app.data.kungal.KungalResource
+import com.galstruo.app.data.network.FileDownloader
 import com.galstruo.app.data.download.DownloadManager
 import com.galstruo.app.data.download.DownloadState
 import com.galstruo.app.data.download.DownloadTask
@@ -106,6 +107,7 @@ import com.galstruo.app.data.local.HistoryStore
 import com.galstruo.app.data.searchgal.SearchGalItem
 import com.galstruo.app.data.searchgal.SearchGalPlatform
 import com.galstruo.app.data.shinnku.ShinnkuFile
+import java.io.File
 import com.galstruo.app.data.shinnku.VersionType
 import com.galstruo.app.data.ymgal.GameDetail
 import com.galstruo.app.data.ymgal.GameItem
@@ -162,7 +164,7 @@ fun GameDetailScreen(
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
                 }
             },
             actions = {
@@ -181,7 +183,7 @@ fun GameDetailScreen(
                         }
                     },
                 ) {
-                    Icon(Icons.Filled.Share, contentDescription = "分享")
+                    Icon(Icons.Rounded.Share, contentDescription = "分享")
                 }
                 IconButton(
                     onClick = {
@@ -212,7 +214,7 @@ fun GameDetailScreen(
                     },
                 ) {
                     Icon(
-                        if (isFav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = if (isFav) "取消收藏" else "收藏",
                         tint = if (isFav) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -266,7 +268,30 @@ private fun DetailContent(
     var linksFor by remember { mutableStateOf<KungalResource?>(null) }
     var links by remember { mutableStateOf<List<String>>(emptyList()) }
     var linksLoading by remember { mutableStateOf(false) }
+    var directDownloading by remember { mutableStateOf<String?>(null) }  // 正在直下的链接 URL
     val scope = rememberCoroutineScope()
+
+    /** 直接下载网盘直链到系统下载目录 */
+    fun downloadDirectLink(url: String, fileName: String = "download") {
+        directDownloading = url
+        scope.launch {
+            try {
+                val destDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val destFile = File(destDir, fileName)
+                // 如果文件已存在，先删除再重新下载
+                if (destFile.exists()) destFile.delete()
+
+                FileDownloader.download(url, destFile) { percent ->
+                    // TODO: 可以在通知栏显示进度
+                }
+                Toast.makeText(context, "已保存到下载目录：${fileName}", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "下载失败:${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                directDownloading = null
+            }
+        }
+    }
 
     fun viewLinks(res: KungalResource) {
         linksFor = res
@@ -579,7 +604,13 @@ private fun DetailContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(8.dp))
-                        links.forEach { link -> LinkRow(link) }
+                        links.forEach { link ->
+                            LinkRow(
+                                link,
+                                onDirectDownload = { url -> downloadDirectLink(url) },
+                                isDownloading = directDownloading == link,
+                            )
+                        }
                     }
                 }
             },
@@ -628,7 +659,7 @@ private fun KungalTabContent(vm: GameDetailViewModel) {
 
         vm.kungalResources.isEmpty() -> Column {
             Text(
-                "点「查找下载资源」会连同真红小站、更多资源站一起搜索。",
+                "还没有搜索过网盘资源。点上方「查找下载资源」按钮,会同时搜索真红小站、网盘资源和更多资源站。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(8.dp))
@@ -714,7 +745,7 @@ private fun SearchGalTabContent(vm: GameDetailViewModel) {
 
         vm.sgPlatforms.isEmpty() -> Column {
             Text(
-                "点「查找下载资源」会连同真红小站、鲲galgame 一起搜索。",
+                "还没有搜索过更多资源站。点上方「查找下载资源」按钮,会同时搜索真红小站、网盘资源和更多资源站。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(8.dp))
@@ -762,6 +793,18 @@ private fun ResourceCard(
                 ResourceTabPill("下载资源", tab == 0, { onTab(0) })
                 ResourceTabPill("网盘资源", tab == 1, { onTab(1) })
                 ResourceTabPill("更多资源站", tab == 2, { onTab(2) })
+            }
+            Spacer(Modifier.height(14.dp))
+            // 主按钮:一次同时搜索三个来源(真红小站 / 网盘资源 / 更多资源站),
+            // 放在卡片级、标签上方,切到哪个标签都看得到
+            Button(
+                onClick = onFind,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (vm.resourcesSearched || vm.kungalSearched || vm.sgSearched) "重新搜索"
+                    else "查找下载资源",
+                )
             }
             Spacer(Modifier.height(14.dp))
             // 内容区不套切换动画(动画会压缩内容导致文字堆叠),靠标签弹跳反馈
@@ -999,9 +1042,9 @@ private fun KungalResourceRow(
     }
 }
 
-/** 网盘链接行:复制 / 打开 */
+/** 网盘链接行:复制 / 打开 / 直下 */
 @Composable
-private fun LinkRow(link: String) {
+private fun LinkRow(link: String, onDirectDownload: (String) -> Unit, isDownloading: Boolean = false) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     Row(
@@ -1026,6 +1069,16 @@ private fun LinkRow(link: String) {
                 Toast.makeText(context, "无法打开链接", Toast.LENGTH_SHORT).show()
             }
         }) { Text("打开") }
+        TextButton(onClick = {
+            if (isDownloading) return@TextButton
+            onDirectDownload(link)
+        }) {
+            if (isDownloading) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+                Text("直下")
+            }
+        }
     }
 }
 
@@ -1066,13 +1119,9 @@ private fun DownloadTabContent(
         else -> {
             if (resources.isEmpty()) {
                 Text(
-                    "在真红小站搜索本游戏的下载资源,支持安卓直装 / KRKR / ONS / PC 多版本。",
+                    "点上方「查找下载资源」按钮,会同时搜索真红小站、网盘资源和更多资源站。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(12.dp))
-            }
-            Button(onClick = onFind) {
-                Text(if (resources.isEmpty()) "查找下载资源" else "重新搜索")
             }
         }
     }
@@ -1192,7 +1241,7 @@ private fun ResourceRow(
                                 onClick = { DownloadManager.cancel(current.id) },
                                 modifier = Modifier.size(32.dp),
                             ) {
-                                Icon(Icons.Filled.Close, contentDescription = "取消下载", Modifier.size(18.dp))
+                                Icon(Icons.Rounded.Close, contentDescription = "取消下载", Modifier.size(18.dp))
                             }
                         }
                     }

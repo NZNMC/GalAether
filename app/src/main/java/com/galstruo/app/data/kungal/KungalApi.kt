@@ -207,32 +207,100 @@ object KungalApi {
         // 官网把 pinia KUNGalgameUser 存储持久化在同名 Cookie 里(SSR 还原登录态用),
         // Cookie 值就是存储对象的 JSON(中文等字符会被 URL 编码)。这是最可靠的来源:
         // 不依赖任何接口,也不依赖网页当前状态,直接解析
-        parseKungalUserCookie(cookies)?.let { return it }
+        var user = parseKungalUserCookie(cookies)
         // 新接口:GET /api/user/session
-        val fromSession = runCatching {
-            val raw = fetchWithCookiesOrNull("$BASE/api/user/session", cookies) ?: return@runCatching null
-            val json = JsonParser.parseString(raw).asJsonObject
-            if (json.get("code")?.asInt == 205) return@runCatching null
-            val userObj = findObject(json, "user") ?: return@runCatching null
-            val name = userObj.get("name")?.asString ?: userObj.get("username")?.asString
-            if (name.isNullOrBlank()) null
-            else KungalUser(
-                id = userObj.get("uid")?.asLong ?: userObj.get("id")?.asLong ?: 0L,
-                name = name,
-                avatar = avatarOf(userObj.get("avatar")),
-            )
-        }.getOrNull()
-        if (fromSession != null) return fromSession
+        if (user == null) {
+            user = runCatching {
+                val raw = fetchWithCookiesOrNull("$BASE/api/user/session", cookies) ?: return@runCatching null
+                val json = JsonParser.parseString(raw).asJsonObject
+                if (json.get("code")?.asInt == 205) return@runCatching null
+                val userObj = findObject(json, "user") ?: return@runCatching null
+                val name = userObj.get("name")?.asString ?: userObj.get("username")?.asString
+                if (name.isNullOrBlank()) null
+                else KungalUser(
+                    id = userObj.get("uid")?.asLong ?: userObj.get("id")?.asLong ?: 0L,
+                    name = name,
+                    avatar = avatarOf(userObj.get("avatar")),
+                )
+            }.getOrNull()
+        }
         // 旧接口(官网已退役,过渡期兜底)
-        val legacy = try {
-            parseLegacyUser(fetchWithCookies("$BASE/api/user", cookies))
+        if (user == null) {
+            user = try {
+                parseLegacyUser(fetchWithCookies("$BASE/api/user", cookies))
+            } catch (e: Exception) {
+                null
+            }
+        }
+        // 最终兜底:接口全不可用时,直接抓官网首页(SSR 页面),
+        // 登录用户的数据就在页面的 __NUXT_DATA__ 载荷里
+        if (user == null) user = currentUserFromHomepage(cookies)
+
+        // 头像补全:SSR 载荷与 Cookie 里当前用户的头像恒为空,依次兜底:
+        // ① 用户主页 /user/{id} 的公开数据(设置了自定义头像的用户在这里有);
+        // ② 官网默认头像池(未设置头像的用户,官网按名字哈希分配一张,照抄规则保证同款)
+        if (user != null && user.avatar.isBlank() && user.id > 0) {
+            fetchUserAvatar(user.id, cookies)?.takeIf { it.isNotBlank() }?.let {
+                user = user?.copy(avatar = it)
+            }
+        }
+        if (user != null && user.avatar.isBlank()) {
+            user = user?.copy(avatar = kungalDefaultAvatar(user.name))
+        }
+        return user
+    }
+
+    /**
+     * 从用户主页 /user/{id} 取头像。
+     * 官网 SSR 里 KUNGalgameUser 的头像恒为空,但用户主页的载荷里,
+     * 目标用户对象(id 为字符串形态)带完整头像 {url, hash, …}。
+     */
+    suspend fun fetchUserAvatar(userId: Long, cookies: String?): String? = withContext(Dispatchers.IO) {
+        try {
+            val html = fetchWithCookiesOrNull("$BASE/user/$userId", cookies.orEmpty())
+            val m = html?.let {
+                Regex("""<script[^>]*id="__NUXT_DATA__"[^>]*>([\s\S]*?)</script>""").find(it)
+            } ?: return@withContext null
+            val arr = runCatching { JsonParser.parseString(m.groupValues[1]).asJsonArray }.getOrNull()
+                ?: return@withContext null
+            for (el in arr) {
+                if (!el.isJsonObject) continue
+                val o = el.asJsonObject
+                val avatarEl = o.get("avatar") ?: continue
+                val idEl = o.get("id") ?: continue
+                val idVal = derefPayload(arr, idEl)
+                // 主页里用户 id 是字符串形态(如 "131523")
+                val idLong = idVal.asString.toLongOrNull()
+                    ?: (if (idVal.isJsonPrimitive && idVal.asJsonPrimitive.isNumber) idVal.asLong else null)
+                    ?: continue
+                if (idLong != userId) continue
+                // 头像对象里的 url/hash 在载荷里仍是指针,要逐层解引用
+                val av = derefPayload(arr, avatarEl)
+                var url = ""
+                when {
+                    av.isJsonObject -> {
+                        val o2 = av.asJsonObject
+                        url = o2.get("url")?.let { derefPayload(arr, it) }?.asString.orEmpty()
+                        if (url.isBlank()) {
+                            url = o2.get("src")?.let { derefPayload(arr, it) }?.asString.orEmpty()
+                        }
+                        if (url.isBlank()) {
+                            url = o2.get("hash")?.let { derefPayload(arr, it) }?.asString.orEmpty()
+                        }
+                    }
+                    av.isJsonPrimitive && av.asJsonPrimitive.isString -> url = av.asString
+                }
+                if (url.isBlank()) continue
+                if (url.startsWith("/")) url = BASE + url
+                else if (!url.startsWith("http") && !url.contains(".")) {
+                    url = "https://image.kungal.iloveren.link/${url.substring(0, 2)}/${url.substring(2, 4)}/$url.webp"
+                }
+                return@withContext url
+            }
+            null
         } catch (e: Exception) {
             null
         }
-        if (legacy != null) return legacy
-        // 最终兜底:接口全不可用时,直接抓官网首页(SSR 页面),
-        // 登录用户的数据就在页面的 __NUXT_DATA__ 载荷里
-        return currentUserFromHomepage(cookies)
     }
 
     /**
@@ -255,12 +323,21 @@ object KungalApi {
             val o = el.asJsonObject
             val name = o.get("name")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
                 ?.asString.orEmpty()
-            if (name.isBlank()) continue
+            // 官网把未登录的匿名昵称存成字面量 '""',要当空值过滤
+            if (name.isBlank() || name == "\"\"") continue
             val avatar = avatarOf(o.get("avatar")).ifBlank { avatarOf(o.get("avatarMin")) }
+            // id 是数字(如 132287);sub 是 UUID 字符串,不能当数字 id 用
+            val userId = o.get("id")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+                ?.asLong ?: o.get("id")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                ?.asString?.toLongOrNull() ?: 0L
             return KungalUser(
-                id = o.get("sub")?.takeIf { it.isJsonPrimitive }?.asString?.toLongOrNull() ?: 0L,
+                id = userId,
                 name = name,
                 avatar = avatar,
+                moemoepoint = o.get("moemoepoint")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+                    ?.asInt ?: 0,
+                isCheckIn = o.get("isCheckIn")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }
+                    ?.asBoolean ?: false,
             )
         }
         return null
@@ -304,6 +381,8 @@ object KungalApi {
                     if (idx < 0 || idx >= arr.size()) break
                     v = arr[idx]
                     d++
+                    // 落到数字就是叶子值(如萌汁点数 42),不能再当指针继续追
+                    if (v.isJsonPrimitive && v.asJsonPrimitive.isNumber) break
                 }
                 v.isJsonArray && v.asJsonArray.size() >= 2 -> {
                     val a = v.asJsonArray
@@ -316,6 +395,7 @@ object KungalApi {
                         if (idx < 0 || idx >= arr.size()) break
                         v = arr[idx]
                         d++
+                        if (v.isJsonPrimitive && v.asJsonPrimitive.isNumber) break
                     } else break
                 }
                 else -> break
@@ -336,10 +416,15 @@ object KungalApi {
             var avatar = when {
                 v.isJsonPrimitive -> v.asString
                 v.isJsonArray -> str(v.asJsonArray.firstOrNull())
-                v.isJsonObject -> str(v.asJsonObject.get("url")).ifBlank { str(v.asJsonObject.get("src")) }
+                v.isJsonObject -> str(v.asJsonObject.get("url")).ifBlank {
+                    str(v.asJsonObject.get("src")).ifBlank { str(v.asJsonObject.get("hash")) }
+                }
                 else -> ""
             }
             if (avatar.isNotBlank() && avatar.startsWith("/")) avatar = BASE + avatar
+            else if (avatar.isNotBlank() && !avatar.startsWith("http") && !avatar.contains(".")) {
+                avatar = "https://image.kungal.iloveren.link/${avatar.substring(0, 2)}/${avatar.substring(2, 4)}/$avatar.webp"
+            }
             return avatar
         }
         // KUNGalgameUser 存储对象:同时带 moemoepoint 与 isCheckIn/dailyCheckIn 等专属字段
@@ -352,11 +437,18 @@ object KungalApi {
                 o.get("dailyToolsetUploadBytes") == null
             ) continue
             val name = str(o.get("name"))
-            if (name.isBlank()) continue
+            // 官网把未登录的匿名昵称存成字面量 '""'(两个引号字符),要当空值过滤
+            if (name.isBlank() || name == "\"\"") continue
+            val moemoe = deref(o.get("moemoepoint"))
+                .takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt ?: 0
+            val checkIn = deref(o.get("isCheckIn"))
+                .takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean ?: false
             return KungalUser(
                 id = str(o.get("sub")).toLongOrNull() ?: 0L,
                 name = name,
                 avatar = avatarOf(o.get("avatar")).ifBlank { avatarOf(o.get("avatarMin")) },
+                moemoepoint = moemoe,
+                isCheckIn = checkIn,
             )
         }
         return null
@@ -382,7 +474,11 @@ object KungalApi {
             }
             else -> ""
         }
+        // 站内相对路径补全;纯 hash 拼完整 CDN 地址(鲲头像:image.kungal.iloveren.link/前2位/第3-4位/完整hash.webp)
         if (avatar.isNotBlank() && avatar.startsWith("/")) avatar = BASE + avatar
+        else if (avatar.isNotBlank() && !avatar.startsWith("http") && !avatar.contains(".")) {
+            avatar = "https://image.kungal.iloveren.link/${avatar.substring(0, 2)}/${avatar.substring(2, 4)}/$avatar.webp"
+        }
         return avatar
     }
 

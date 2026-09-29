@@ -12,17 +12,22 @@ android {
         applicationId = "com.galstruo.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 28
-        versionName = "1.0.5"
+        versionCode = 30
+        versionName = "1.0.7"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 裁剪:material-icons-extended 有 9000+ 图标,debug 包全量打进 dex(~59MB),
+            // 裁剪后只保留用到的几十个,包体积大幅下降
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 个人自用应用,用 debug 签名打 release 包(不上架商店,无需正式签名)
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -55,5 +60,5 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.compose.material:material-icons-extended")
 }
