@@ -25,7 +25,6 @@
 | 游戏信息(名称/封面/简介/标签) | 月幕Galgame | 官方 API(OAuth2 公开凭据) |
 | 直链下载 | 真红小站 shinnku.com | 网页解析,免登录 |
 | 网盘资源链接 | 鲲galgame kungal.com | 网页解析,链接复制/唤起 |
-| 直链下载(扩展) | TouchGAL | 官方开发者 API(申请中) |
 
 ## 技术栈
 
